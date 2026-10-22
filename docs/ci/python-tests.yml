@@ -1,0 +1,27 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements-test.txt && pip install -e .
+      - run: pytest -q
+
+  rootless-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: podman build -t tcl-test -f Containerfile .
+      - run: podman run --rm --userns=keep-id tcl-test

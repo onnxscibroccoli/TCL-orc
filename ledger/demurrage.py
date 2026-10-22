@@ -1,25 +1,11 @@
-"""Empirical demurrage ledger simulation matching CirculatoryEngine invariants.
-All values are integers (wei-scale). Tests must pass in rootless container.
-"""
-from __future__ import annotations
+"""Backwards-compatible shim: moved to tcl.ledger.demurrage."""
+import sys as _sys
+from pathlib import Path as _P
 
-T = 5_000_000 * 10**18
-DELTA_NUM = 5
-DELTA_DEN = 10_000  # 0.0005 = 5/10000 per day, scaled
+_src = str(_P(__file__).resolve().parent.parent / "src")
+if _src not in _sys.path:
+    _sys.path.insert(0, _src)
+from tcl.ledger.demurrage import *  # noqa: F401,F403,E402
+from tcl.ledger import demurrage as _m  # noqa: E402
 
-
-def apply_demurrage(balance: int, delta_t_days: int) -> tuple[int, int]:
-    """Return (new_balance, extracted_to_vault)."""
-    if balance <= T or delta_t_days <= 0:
-        return balance, 0
-    surplus = balance - T
-    fee = (surplus * DELTA_NUM * delta_t_days) // DELTA_DEN
-    if fee > surplus:
-        fee = surplus
-    return balance - fee, fee
-
-
-def redistribute(vault: int, amount: int) -> tuple[int, int]:
-    if amount > vault or amount < 0:
-        raise ValueError("invalid redistribution amount")
-    return vault - amount, amount
+globals().update({k: v for k, v in vars(_m).items() if not k.startswith("__")})

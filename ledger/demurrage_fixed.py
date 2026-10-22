@@ -1,49 +1,11 @@
-"""Fixed-point demurrage with bounded Taylor steps.
-Matches continuous decay λ derived from r_daily = 0.0005.
-All arithmetic is integer. Tests must pass in rootless container.
-"""
-from __future__ import annotations
+"""Backwards-compatible shim: moved to tcl.ledger.demurrage_fixed."""
+import sys as _sys
+from pathlib import Path as _P
 
-SCALE = 10**18
-T = 5_000_000 * SCALE
-# λ_sec * SCALE ≈ 5.788e9 for r_daily = 0.0005
-LAMBDA_SCALED = 5_788_484_761
-MAX_STEP_SECONDS = 604_800  # 7 days
+_src = str(_P(__file__).resolve().parent.parent / "src")
+if _src not in _sys.path:
+    _sys.path.insert(0, _src)
+from tcl.ledger.demurrage_fixed import *  # noqa: F401,F403,E402
+from tcl.ledger import demurrage_fixed as _m  # noqa: E402
 
-
-def _taylor_multiplier(x_scaled: int) -> int:
-    """5th-order Maclaurin for e^{-x}, x = x_scaled / SCALE."""
-    if x_scaled <= 0:
-        return SCALE
-    t0 = SCALE
-    t1 = x_scaled
-    t2 = (t1 * x_scaled) // (2 * SCALE)
-    t3 = (t2 * x_scaled) // (3 * SCALE)
-    t4 = (t3 * x_scaled) // (4 * SCALE)
-    t5 = (t4 * x_scaled) // (5 * SCALE)
-    m = t0 - t1 + t2 - t3 + t4 - t5
-    return max(m, 0)
-
-
-def apply_demurrage_fixed(balance: int, delta_t_seconds: int) -> tuple[int, int]:
-    """Return (new_balance, extracted). Sub-threshold balances are unchanged."""
-    if balance <= T or delta_t_seconds <= 0:
-        return balance, 0
-    remaining = delta_t_seconds
-    current = balance
-    extracted = 0
-    while remaining > 0:
-        step = min(remaining, MAX_STEP_SECONDS)
-        x_scaled = (LAMBDA_SCALED * step) // 1
-        mult = _taylor_multiplier(x_scaled)
-        if step >= 86_400:
-            mult = max(0, mult - 55)  # truncation correction
-        surplus = current - T
-        decayed = (surplus * mult) // SCALE
-        fee = surplus - decayed
-        if fee > surplus:
-            fee = surplus
-        current -= fee
-        extracted += fee
-        remaining -= step
-    return current, extracted
+globals().update({k: v for k, v in vars(_m).items() if not k.startswith("__")})
