@@ -1,0 +1,9 @@
+{
+  "artifacts": {
+    "ledger/demurrage.py": "8bf9eae4c3b1f80487768a583c1783567e08d6636a9a6b4d65bc485c41dbb405",
+    "ledger/test_demurrage.py": "caf0f59c0080cbf67855337a8c8139eb03ff49187dea34518f585b1763940233",
+    "contracts/CirculatoryEngine.sol": "32491ff212d01eeef8c5e03be074cb912765bd3b6285ed154d3b60df4e13f655",
+    "contracts/PhysicalMintController.sol": "a8745c014e10cc5fdd56ac2822d0417ce8a242729fc430f858193271e8b7dedc",
+    "Containerfile": "6dd48c3de8acf3b02539eafcdc69fc76f75beb3e2cc4b7e2f58e9cd990d72228"
+  }
+}
