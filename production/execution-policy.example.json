@@ -1,0 +1,15 @@
+{
+  "keys": {"release": "REPLACE_WITH_BASE64_ED25519_PUBLIC_KEY"},
+  "images": ["REPLACE_WITH_APPROVED_IMAGE@sha256:REPLACE_WITH_REAL_REGISTRY_DIGEST"],
+  "commands": [["python3", "-V"]],
+  "secrets": {},
+  "limits": {
+    "tasks": 8,
+    "timeout": 300,
+    "total_timeout": 1200,
+    "memory_mb": 256,
+    "cpus": 1,
+    "pids": 64,
+    "tmpfs_mb": 32
+  }
+}

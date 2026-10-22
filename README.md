@@ -1,15 +1,17 @@
 # Thresholded Circulatory Ledger
 
 TCL is a research implementation of a fixed-supply ledger, thresholded demurrage, physical-note escrow, and zero-knowledge redemption.
-Version 0.2 connects the ledger, Poseidon circuit, generated Groth16 verifier, and durable task runtime in executable tests.
+The v0.2 research core connects the ledger, Poseidon circuit, generated Groth16 verifier, and durable task runtime in executable tests.
 It is not a production currency deployment.
 
 ## Run the complete protocol checks
 
-Use Node.js 22 or newer, npm, Python 3.10 or newer, Bash, and Git on Linux or Termux.
+Use Node.js 22 or newer, npm, Python 3.12 or newer, Bash, and Git on Linux for the complete suite.
+The development CLI can still be used separately in Termux; production containment requires a dedicated supported Linux host.
 The local EVM test dependency may use a JavaScript fallback on newer Node versions.
 
 ```bash
+python3 -m pip install -r requirements-production.txt -r verification/requirements.txt
 npm ci
 npm run check
 ```
@@ -64,3 +66,57 @@ A secret-knowledge proof does not establish physical unclonability, enrollment a
 The immunity threshold is per address; per-person enforcement requires an additional identity protocol.
 Governance controls redistribution and the initial controller choice.
 See the protocol specification for these boundaries and the remaining research work.
+
+## Production deployment architecture (v0.3)
+
+Production controls preserve the existing commitment/nullifier statement and compounding ledger.
+They are implemented separately from the local development daemon and test ceremony.
+Use Python 3.12+ on a Linux host with durable filesystem primitives for the production tooling.
+Rootless Docker with working cgroup resource controllers is required for production task execution.
+
+```bash
+python3 -m pip install -r requirements-production.txt -r verification/requirements.txt
+npm ci
+npm run check
+```
+
+The checks now include real signed ceremony transcript verification with synthetic participants, dual archive readback, symbolic invariant proofs and mutation counterexamples, production contract regression tests, and release-policy rejection tests.
+Synthetic test identities never establish an independently operated production ceremony.
+GitHub Actions additionally runs actual rootless-container isolation and timeout-cleanup acceptance.
+
+| Control | Implementation |
+| --- | --- |
+| Independent MPC and artifact retention | `production/ceremony.py`, [ceremony procedure](docs/07_ceremony.md) |
+| Signed OCI task DAG and secret-file injection | `production/executor.py`, [execution policy](docs/08_execution.md) |
+| Immutable ledger/controller provenance and governance floor | `contracts/production/`, [deployment architecture](docs/06_production_architecture.md) |
+| State-machine invariants and compiler artifact fingerprints | `verification/ledger_model.py`, `scripts/audit_contracts.cjs`, [verification limits](docs/09_verification.md) |
+| Evidence-based release promotion | `production/release_gate.py`, [required evidence](docs/10_release_gates.md) |
+| Exact unchanged redemption statement | `production/circuit-statement.json` |
+
+The production controller starts with deposits disabled.
+Its constructor pins the verifier runtime hash, release digest, incident guardian, enrollment authority, and exact approved timelock implementation.
+The factory configures ledger escrow atomically and nominates the timelock as governor.
+The multisignature proposer schedules governance acceptance and subsequent deposit activation through the timelock's minimum two-day delay.
+The factory has no path to use its temporary governor authority for other ledger operations.
+Enrollment uses EIP-712 signatures bound to depositor, note commitment/value, one-use enrollment identifier, expiry, release digest, chain, and controller.
+Issuer keys may use ECDSA or an ERC-1271 signing contract; a signature is admission authorization, not evidence of physical unclonability.
+Guardians can independently halt deposits or redemptions; only delayed governance can resume either.
+There is no guardian withdrawal or verifier replacement path.
+
+Before deployment, independently provision and pin the actual ceremony, execution, and release policies.
+The example policy files intentionally contain invalid placeholders.
+The release gate requires exact deployment parameters and artifact hashes, at least two distinct release authorities, separate executor attestation authority, independent security/refinement reviews, custody evidence, physical enrollment qualification, privacy-scope review, jurisdiction review, and an incident recovery drill.
+It does not sign or broadcast a transaction.
+
+```bash
+python3 production/ceremony.py verify \
+  --policy /trusted/ceremony-policy.json --manifest /release/manifest.json \
+  --archive /durable/archive --replica /independent/replica
+python3 -m production.release_gate \
+  --config /release/deployment.json --policy /trusted/release-policy.json \
+  --approvals /release/approvals.json --root /release/bundle
+```
+
+No independent production ceremony, live chain deployment, physical PUF qualification, or compliance approval has been performed by these repository tests.
+Fuzzy extraction and shielded payments have explicit integration designs and acceptance requirements; neither is represented as a completed privacy system.
+The formal model proves its stated abstract transitions, not automatic equivalence of deployed Solidity bytecode.

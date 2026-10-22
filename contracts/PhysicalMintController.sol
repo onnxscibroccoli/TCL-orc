@@ -34,7 +34,8 @@ contract PhysicalMintController {
         context = uint256(keccak256(abi.encode(block.chainid, address(this)))) % FIELD;
     }
 
-    function lockNote(bytes32 commitment, uint256 value) external nonReentrant {
+    function lockNote(bytes32 commitment, uint256 value) public virtual nonReentrant {
+        _beforeLock();
         require(circulatoryEngine.physicalMint() == address(this), "not configured");
         require(uint256(commitment) > 0 && uint256(commitment) < FIELD, "commitment range");
         require(value > 0 && value <= type(uint128).max, "value range");
@@ -45,8 +46,12 @@ contract PhysicalMintController {
         emit NoteLocked(commitment, value);
     }
 
+    function _beforeLock() internal view virtual {}
+    function _beforeRedeem() internal view virtual {}
+
     /// @dev Proof encodes a, b, c as eight uint256 coordinates in snarkjs Solidity order.
-    function redeemNote(bytes32 commitment, bytes32 nullifier, address recipient, bytes calldata proof) external nonReentrant {
+    function redeemNote(bytes32 commitment, bytes32 nullifier, address recipient, bytes calldata proof) public virtual nonReentrant {
+        _beforeRedeem();
         NoteCommitment storage note = notes[commitment];
         require(note.locked, "not locked");
         require(recipient != address(0) && recipient != address(this), "invalid recipient");

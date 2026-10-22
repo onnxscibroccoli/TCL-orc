@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "contributors": {},
+  "release_approvers": {},
+  "phase_quorum": 3,
+  "release_quorum": 2,
+  "pinned_artifacts": {
+    "source": "REPLACE_WITH_REVIEWED_SOURCE_TREE_SHA256",
+    "circuit": "REPLACE_WITH_CIRCUIT_SHA256",
+    "lock": "REPLACE_WITH_PACKAGE_LOCK_SHA256",
+    "toolchain": "REPLACE_WITH_COMPLETE_NODE_MODULES_TREE_SHA256"
+  },
+  "beacons": {
+    "ptau": {"source": "PRECOMMIT_FUTURE_PUBLIC_EVENT_AND_RETRIEVAL_METHOD", "value": "REPLACE_AFTER_EVENT_WITH_PUBLIC_HEX", "iterations": 10, "name": "TCL phase1 public beacon"},
+    "zkey": {"source": "PRECOMMIT_FUTURE_PUBLIC_EVENT_AND_RETRIEVAL_METHOD", "value": "REPLACE_AFTER_EVENT_WITH_PUBLIC_HEX", "iterations": 10, "name": "TCL phase2 public beacon"}
+  }
+}

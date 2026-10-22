@@ -4,7 +4,9 @@
 
 The implemented protocol is a fixed-supply transparent ledger with demurrage, a redistribution vault, backed note escrow, and Groth16 proofs of secret knowledge.
 It is a research implementation rather than a claim of production currency readiness.
-Physical enrollment, fuzzy extraction, shielded payments, productive-work attestations, and decentralized governance are separate unimplemented protocols.
+Physical PUF measurement, fuzzy extraction, shielded payments, and productive-work attestations remain unimplemented protocols.
+The production architecture adds issuer-attested enrollment admission and approved timelock governance around this base ledger.
+See `06_production_architecture.md` through `10_release_gates.md` for deployment controls and required external evidence.
 No private key, production ceremony parameter, live deployment, or personal device state is required for the tests.
 
 ## Conservation and authority
