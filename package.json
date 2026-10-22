@@ -4,15 +4,16 @@
   "description": "Prototype multi-agent orchestration and demurrage redistribution for Thresholded Circulatory Ledger",
   "scripts": {
     "orchestrate": "python3 agents/orchestrator.py",
-    "test": "npm run test:runtime && npm run test:contracts && npm run test:zk && npm run audit:contracts && npm run lint:docs",
-    "test:runtime": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "test": "npm run test:runtime && npm run test:contracts && npm run test:zk && npm run audit:contracts && npm run lint:docs && npm run audit:provenance",
+    "test:runtime": "python3 -m unittest discover -s tests -p 'test_*.py' && python3 -m pytest -q ledger/test_demurrage.py",
     "test:contracts": "node --test tests/protocol.test.cjs tests/production-contracts.test.cjs",
     "zk:setup": "bash scripts/zk-setup.sh",
     "test:zk": "node --test tests/zk.test.cjs",
     "lint:docs": "markdownlint-cli2 && node .github/scripts/validate-katex.js",
     "check": "npm run zk:setup && npm test",
     "audit:contracts": "node scripts/audit_contracts.cjs",
-    "audit:model": "python3 -m verification.ledger_model"
+    "audit:model": "python3 -m verification.ledger_model",
+    "audit:provenance": "python3 scripts/record_provenance.py --check"
   },
   "devDependencies": {
     "circom2": "0.2.22",

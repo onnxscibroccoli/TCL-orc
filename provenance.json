@@ -1,0 +1,31 @@
+{
+  "artifacts": {
+    "ledger/demurrage.py": "68b7602a6def6e5dd7bb4e7c45cf31b0cf016b5b3a000edea79ff30040bf3901",
+    "ledger/test_demurrage.py": "d48df3002bc43f9a0f8804ddee83a302ca7022924b3b91db60831c2adc4235a2",
+    "tests/protocol.test.cjs": "b6a6429ef64fb58483c3b60bc961a3565b3b9fb25913e8f1b34d97171bf7aec8",
+    "tests/production-contracts.test.cjs": "a22184e5fce25945667f4585f2d8ab198fa2277f372836982be59866374cec6f",
+    "tests/zk.test.cjs": "94694fba081f359d72a89178fbceb76cad8c1d8e0e0590324f4e67ae68f79d79",
+    "contracts/CirculatoryEngine.sol": "ec8d85c1ad01035ed44652af3fd765570431eb2428d91b0ed25b09b8bc2ea883",
+    "contracts/PhysicalMintController.sol": "ee0d96f5dd036a1bfac0b08c1ae383a0f9b5647512e7ddcb8f8300d591ae514e",
+    "contracts/production/ProductionMintController.sol": "68d48771ef23ae31cc3b768ebfcce990d5f7de7fe146d29c484f8f038e513196",
+    "contracts/production/ProtocolDeploymentFactory.sol": "58d5bd2fee234bd9c7332474986312b49d881078f169f0397ca20f89ab69933b",
+    "contracts/production/ProtocolTimelock.sol": "134d002711cc165fd2b8ce21df58d2f81dbeeeb21d1496ebbb6af05e31ab7a49",
+    "circuits/puf_verify.circom": "75ad0740b09fa4682d6b71db81df2d921fbe5d578ad8bf57c5216a353efeca3f",
+    "Containerfile": "7f593f6f477f0ff0bf2dfb3158fc4cb1574f65537af13824dd70278b26c61388",
+    "production/validate-in-container.sh": "a4fb53050c67fc71b0611046c3308f7339126a1c7c1dc4e2cbdb0dd54426e6f4",
+    "scripts/container_validation.py": "a59d380c6fc45a6825d5ae12ba24a689909d8ae01d8fd86966c55c99168fd51c",
+    "production/executor.py": "53aefab11c3c33a74f3071a9495398d8b0b1e3bd0549c4ee4f50ce5a331cea5f",
+    "production/ceremony.py": "57a8bebf6751b436febff2bc15d6ff8e8faa6280b0825323aaa2cfacfd586eed",
+    "production/ceremony_profile.py": "bc24103d931d19e67a23f068a69fef2b5a1f4f0e3d76901882a9030d8f7fce49",
+    "production/drand.py": "5e80c24ad4afb2a30af4955b975d4004dcc88351d4f34a95ebcb7588fd4d126e",
+    "production/hardware.py": "102c6ea9a0a58498a147d6436b91bc9efd473b6cb5c886be73469cba4f9dd2d7",
+    "production/release_gate.py": "3ab0948605b5612e5f47fff3e07cd19b50ee1dc77401d8b05d4cb2931b3bcf0f",
+    "scripts/record_provenance.py": "0cb8e748359b8d7020e291972f43097636d694bdd4764a8b8d86ebbc035226a4",
+    "package.json": "c5e1df54a65608a18720059311b690a269dd617904f970b7be97a401c9ae3e79",
+    "package-lock.json": "3ba4823fdfe765e63df4188afcc1b4e56b377cfe820eb893359bb6d81f26ef9a",
+    "requirements-production.txt": "161107d148f05340121ee740f73a2484451ce1e9acfd2cc3ff4c42cf8df7fa2f",
+    "requirements-test.txt": "a0e201ecda2bc871726ea3bb5db9cfe6b2109f60d8da88eecf910b790794b03d",
+    "verification/requirements.txt": "ade954f8657d115039c0c462a51655096fa9fdaa6c867dfcfe95e97ad5ad274d",
+    ".github/workflows/quality-gates.yml": "32825d9d2f3eb3cec047452f9b8da67b212898fa30053eca73b1d4efb74e0337"
+  }
+}

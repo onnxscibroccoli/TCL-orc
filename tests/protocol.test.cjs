@@ -111,3 +111,22 @@ test('bounded randomized transfers preserve supply and fail atomically on insuff
  assert.equal(await engine.balances(await bob.getAddress()),before);
  }finally{await s.rpc.disconnect();}
 });
+test('Python demurrage reference matches deployed EVM settlement at every sampled interval',async()=>{
+ const {execFileSync}=require('node:child_process');
+ const s=await setup();try{
+ const account=await s.alice.getAddress();let remainder=0n;
+ for(const elapsed of [0,1,59,3600,86400,86400*365,86400*1000000]){
+  const before=await s.engine.balances(account),oldVault=await s.engine.vaultBalance();
+  const previous=await s.engine.lastSettled(account);
+  await s.rpc.request({method:'evm_increaseTime',params:[elapsed]});
+  await s.rpc.request({method:'evm_mine',params:[]});
+  await (await s.engine.applyDemurrage(account,{gasLimit:500000})).wait();
+  const actualElapsed=(await s.engine.lastSettled(account))-previous;
+  const script='import json,sys; from ledger.demurrage import settle; print(json.dumps([str(x) for x in settle(*map(int,sys.argv[1:]))]))';
+  const [balance,fee,nextRemainder]=JSON.parse(execFileSync(process.env.PYTHON||'python3',['-c',script,String(before),String(actualElapsed),String(remainder)],{encoding:'utf8'})).map(BigInt);
+  assert.equal(await s.engine.balances(account),balance);
+  assert.equal((await s.engine.vaultBalance())-oldVault,fee);
+  assert.equal(balance+fee,before);remainder=nextRemainder;
+ }
+ }finally{await s.rpc.disconnect();}
+});

@@ -11,7 +11,7 @@ The development CLI can still be used separately in Termux; production containme
 The local EVM test dependency may use a JavaScript fallback on newer Node versions.
 
 ```bash
-python3 -m pip install -r requirements-production.txt -r verification/requirements.txt
+python3 -m pip install -r requirements-production.txt -r verification/requirements.txt -r requirements-test.txt
 npm ci
 npm run check
 ```
@@ -75,7 +75,7 @@ Use Python 3.12+ on a Linux host with durable filesystem primitives for the prod
 Rootless Docker with working cgroup resource controllers is required for production task execution.
 
 ```bash
-python3 -m pip install -r requirements-production.txt -r verification/requirements.txt
+python3 -m pip install -r requirements-production.txt -r verification/requirements.txt -r requirements-test.txt
 npm ci
 npm run check
 ```
@@ -120,3 +120,20 @@ python3 -m production.release_gate \
 No independent production ceremony, live chain deployment, physical PUF qualification, or compliance approval has been performed by these repository tests.
 Fuzzy extraction and shielded payments have explicit integration designs and acceptance requirements; neither is represented as a completed privacy system.
 The formal model proves its stated abstract transitions, not automatic equivalence of deployed Solidity bytecode.
+
+The empirical validation lane builds a dependency-complete image from the exact
+committed `git archive`, records its SHA-256 and immutable image ID, and runs
+`npm run check` inside a real rootless container with network disabled, a read-only
+root filesystem, no capabilities, UID 65532 and bounded CPU/memory/PIDs.
+The CI artifact `rootless-protocol-validation` retains the test log, compiler
+report, local-test proof artifacts, package versions, hashed provenance and the
+exact exported image for offline replay.
+A missing rootless runtime, failed test, missing evidence or failed cleanup
+fails this lane; there is no simulated acceptance fallback.
+
+Operational extensions and their limits are documented in the
+[corrected readiness roadmap](docs/11_readiness_roadmap.md),
+[authenticated beacon and strict ceremony profile](docs/12_drand_beacon.md), and
+[physical qualification evidence requirements](docs/13_hardware_qualification.md).
+These checks do not replace actual independent ceremony participants, measured
+silicon behavior, custody provisioning or signed external reviews.

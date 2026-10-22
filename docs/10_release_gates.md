@@ -133,3 +133,29 @@ for the accounting abstraction do not establish Solidity or EVM correctness. A
 signed synthetic test fixture demonstrates gate behavior only; it provides no
 production approval. Missing evidence blocks promotion until external authorities
 supply and approve the concrete release bundle.
+
+## Empirical acceptance evidence
+
+Before accepting `mpc_report` for the mainnet profile, release authorities must run
+`production.ceremony_profile` with their externally pinned ten-contributor policy
+and archive its output and signed timing records. For physical evidence they must
+run `production.hardware` against reviewed raw artifacts and independently pinned
+qualification policy. These commands are additional checks: the release gate
+still authenticates the authorities' approval of the complete bundle rather than
+inferring physical or operational truth from report status fields.
+
+The `rootless-protocol-validation` CI artifact binds the committed source archive,
+digest-pinned base image, immutable built image ID, complete test log and generated
+compiler/proof manifests. Full `npm run check` runs with network disabled inside
+an actual rootless container. Dependency installation happens during image build;
+all proof generation, EVM tests and release rejection tests happen offline.
+Symbolic accounting results remain supplemental and cannot replace this runtime
+evidence. CI uses synthetic identities and test ceremony parameters only.
+
+The same artifact includes `validation-image.tar.gz` and its SHA-256 in
+`provenance.json`. Load this exact archive with `docker load` to reproduce the
+recorded runtime without re-resolving build dependencies. Re-run it under the
+recorded isolation/resource arguments with a fresh writable evidence directory.
+The archived proving parameters are explicitly local-test-only and must never
+be promoted to production. Artifact retention and independent content-addressed
+archival are separate release operations; CI upload alone is not permanent storage.

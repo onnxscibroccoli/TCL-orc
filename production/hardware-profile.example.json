@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "threshold": 1e-06,
+  "confidence": 0.95,
+  "quorum": 2,
+  "review_keys": {},
+  "extractor_suite": {
+    "version": "REPLACE_WITH_REVIEWED_SUITE_VERSION",
+    "code": {
+      "path": "private/extractor-source-archive",
+      "sha256": "REPLACE_WITH_SHA256"
+    }
+  },
+  "voltage_bounds_v": [
+    "REPLACE_MIN_V",
+    "REPLACE_MAX_V"
+  ],
+  "strata": [
+    {
+      "temperature_c": -15,
+      "voltage_v": "REPLACE_MIN_V"
+    },
+    {
+      "temperature_c": -15,
+      "voltage_v": "REPLACE_MAX_V"
+    },
+    {
+      "temperature_c": 25,
+      "voltage_v": "REPLACE_MIN_V"
+    },
+    {
+      "temperature_c": 25,
+      "voltage_v": "REPLACE_MAX_V"
+    },
+    {
+      "temperature_c": 80,
+      "voltage_v": "REPLACE_MIN_V"
+    },
+    {
+      "temperature_c": 80,
+      "voltage_v": "REPLACE_MAX_V"
+    }
+  ]
+}
