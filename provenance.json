@@ -11,7 +11,7 @@
     "contracts/production/ProtocolDeploymentFactory.sol": "58d5bd2fee234bd9c7332474986312b49d881078f169f0397ca20f89ab69933b",
     "contracts/production/ProtocolTimelock.sol": "134d002711cc165fd2b8ce21df58d2f81dbeeeb21d1496ebbb6af05e31ab7a49",
     "circuits/puf_verify.circom": "75ad0740b09fa4682d6b71db81df2d921fbe5d578ad8bf57c5216a353efeca3f",
-    "Containerfile": "7e2ef4e28e1fa603d80f2f40879367738581f1855e56ec3e3fc7f6745623a9ec",
+    "Containerfile": "5312da4b4d9ba477f1009c488bb239a6096b64146a44b6313811d57d0f7bfa63",
     "production/validate-in-container.sh": "4270b97860fe4153a2c9c19243c3a0226847536f23e90fb3bb9322bcd5eb131f",
     "scripts/container_validation.py": "ab540407cc3d457fe4e6de27a7f56cb515b324daea8ccaec11b5bda4795c3589",
     "production/executor.py": "53aefab11c3c33a74f3071a9495398d8b0b1e3bd0549c4ee4f50ce5a331cea5f",

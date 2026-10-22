@@ -7,7 +7,7 @@ COPY --from=node_tools /usr/local/bin/node /usr/local/bin/node
 COPY --from=node_tools /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-    && apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get update && apt-get install -y --no-install-recommends git ca-certificates libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}" PYTHONDONTWRITEBYTECODE=1 npm_config_cache=/tmp/npm
