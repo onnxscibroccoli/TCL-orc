@@ -60,7 +60,7 @@ export class WalletClient {
    const proof=AbiCoder.defaultAbiCoder().encode(['uint256[2]','uint256[2][2]','uint256[2]'],[a,b,c]);
    this.#proof={binding,signals:result.signals,proof,epoch};this.#state='ready';
    return{signals:[...result.signals],proof,elapsedMs,proverMs:result.elapsedMs};
-  }catch(error){this.#proof=undefined;if(!this.#closed&&epoch===this.#epoch&&this.#state!=='uncertain')this.#state='needs-regeneration';throw error;}
+  }catch(error){if(!this.#closed&&epoch===this.#epoch){this.#proof=undefined;if(this.#state!=='uncertain')this.#state='needs-regeneration';}throw error;}
  }
  async readBalance(account){
   const epoch=this.#epoch;await this.binding();

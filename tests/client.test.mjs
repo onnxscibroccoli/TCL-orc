@@ -62,3 +62,12 @@ test('balance view keeps committed state separate from a stale local estimate',a
  assert.equal(balanceDisplay(snapshot,61).stale,true);
  assert.equal(balanceDisplay({...snapshot,exempt:true},0).estimate,snapshot.committed);
 });
+
+test('pending context lookup cannot start concurrent proving or reopen a closed client',async()=>{
+ const {WalletClient}=await import('../client/wallet.mjs');const {keccak256}=await import('ethers');let resolve;
+ const provider={request:()=>new Promise(r=>{resolve=r;})};
+ const client=new WalletClient(provider,{chainId:'1',controller:'0x'+'11'.repeat(20),verifier:'0x'+'22'.repeat(20),controllerCodeHash:keccak256('0x6000'),verifierCodeHash:keccak256('0x6000')});
+ const pending=client.prove(new ArrayBuffer(64),{},'0x'+'33'.repeat(20));
+ await assert.rejects(()=>client.prove(new ArrayBuffer(64),{},'0x'+'33'.repeat(20)),/CLIENT_UNAVAILABLE/);
+ client.close();resolve('0x2');await assert.rejects(()=>pending);assert.equal(client.state,'closed');
+});

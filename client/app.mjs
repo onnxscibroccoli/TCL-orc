@@ -17,5 +17,5 @@ document.getElementById('connect').addEventListener('click',async()=>{
   const accounts=await window.ethereum.request({method:'eth_requestAccounts'});const snapshot=await client.readBalance(accounts[0]);
   if(current!==generation)return;const started=performance.now();const render=()=>renderBalance(document,snapshot,Math.floor((performance.now()-started)/1000));render();timer=setInterval(render,1000);
   status.textContent='Connected. Read-only view; no transaction has been requested.';
- }catch(error){client?.close();clearInterval(timer);status.textContent=error.message;}
+ }catch(error){if(current!==generation)return;client?.close();clearInterval(timer);status.textContent=error.message;}
 });

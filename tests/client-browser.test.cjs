@@ -34,6 +34,7 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
   server=http.createServer(async(req,res)=>{
    const entry={method:req.method,url:req.url};requests.push(entry);
    res.setHeader('Cache-Control','no-store');
+   if(req.url==='/deployment.json'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(policy));return;}
    if(req.url==='/rpc'&&req.method==='POST'){
     let text='';for await(const b of req){text+=b;if(text.length>20000){res.writeHead(413);res.end();return;}}
     entry.body=text;
@@ -45,6 +46,17 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
    try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404);res.end();}
   });await new Promise(r=>server.listen(0,'127.0.0.1',r));
   browser=await chromium.launch({executablePath:process.env.TCL_CHROMIUM||'/usr/bin/chromium',headless:true,args:['--disable-dev-shm-usage']});
+  const ui=await browser.newPage();
+  await ui.addInitScript(holder=>{
+   const listeners={};window.ethereum={on:(event,fn)=>(listeners[event]??=[]).push(fn),removeListener:(event,fn)=>{listeners[event]=(listeners[event]??[]).filter(x=>x!==fn);},request:async args=>{
+    if(args.method==='eth_requestAccounts')return[holder];
+    const response=await(await fetch('/rpc',{method:'POST',body:JSON.stringify(args)})).json();if(response.error)throw Error(response.error);return response.result;
+   }};window.switchAccount=()=>{for(const fn of [...listeners.accountsChanged??[]])fn([]);};
+  },await alice.getAddress());
+  await ui.goto('http://127.0.0.1:'+server.address().port+'/index.html');await ui.locator('#connect').click();
+  await ui.waitForFunction(()=>document.getElementById('status').textContent.startsWith('Connected.'));
+  await ui.evaluate(()=>window.switchAccount());assert.equal(await ui.locator('#committed').textContent(),'Unavailable');
+  assert.match(await ui.locator('#status').textContent(),/context changed/);await ui.close();
   const page=await browser.newPage();const origin='http://127.0.0.1:'+server.address().port;
   await page.goto(origin+'/index.html');
   const result=await page.evaluate(async({policy,note,note2,recipient,secret,blinding,holder})=>{
