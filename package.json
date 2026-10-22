@@ -4,7 +4,7 @@
   "description": "Prototype multi-agent orchestration and demurrage redistribution for Thresholded Circulatory Ledger",
   "scripts": {
     "orchestrate": "python3 agents/orchestrator.py",
-    "test": "npm run test:runtime && npm run test:contracts && npm run test:zk && npm run audit:contracts && npm run lint:docs && npm run audit:provenance",
+    "test": "npm run test:runtime && npm run test:contracts && npm run test:zk && npm run test:client && npm run audit:contracts && npm run lint:docs && npm run audit:provenance",
     "test:runtime": "python3 -m unittest discover -s tests -p 'test_*.py' && python3 -m pytest -q ledger/test_demurrage.py",
     "test:contracts": "node --test tests/protocol.test.cjs tests/production-contracts.test.cjs",
     "zk:setup": "bash scripts/zk-setup.sh",
@@ -13,16 +13,22 @@
     "check": "npm run zk:setup && npm test",
     "audit:contracts": "node scripts/audit_contracts.cjs",
     "audit:model": "python3 -m verification.ledger_model",
-    "audit:provenance": "python3 scripts/record_provenance.py --check"
+    "audit:provenance": "python3 scripts/record_provenance.py --check",
+    "test:client:unit": "node --test tests/client.test.mjs",
+    "client:build": "node scripts/build_client.mjs",
+    "test:client:browser": "node --test tests/client-browser.test.cjs",
+    "test:client": "npm run test:client:unit && npm run client:build && npm run test:client:browser"
   },
   "devDependencies": {
     "circom2": "0.2.22",
     "circomlib": "2.0.5",
     "circomlibjs": "0.1.7",
+    "esbuild": "0.25.12",
     "ethers": "6.15.0",
     "ganache": "7.9.2",
     "katex": "0.16.22",
     "markdownlint-cli2": "0.18.1",
+    "playwright": "1.62.1",
     "snarkjs": "0.7.6",
     "solc": "0.8.30"
   },

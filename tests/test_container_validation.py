@@ -33,3 +33,11 @@ class ContainerValidationTests(unittest.TestCase):
             self.assertEqual(set(artifact_hashes(root)),{'result'})
             (root/'nested').mkdir()
             with self.assertRaises(ValueError):artifact_hashes(root)
+
+    def test_client_profile_retains_isolation_under_two_gibibytes(self):
+        from scripts.container_validation import client_runtime_command
+        command=client_runtime_command('sha256:'+'a'*64,'client-test','/tmp/evidence')
+        self.assertIn('--memory=2g',command);self.assertIn('--network=none',command)
+        self.assertIn('--cpus=2',command);self.assertIn('--user=65532:65532',command)
+        self.assertIn('TCL_CONSTRAINED=1',command)
+        self.assertNotIn('--privileged',command)

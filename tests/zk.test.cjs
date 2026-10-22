@@ -44,6 +44,18 @@ test('real Groth16 proof redeems escrow; mutated signals, witnesses and proof fa
  for(let i=0;i<signals.length;i++){const changed=[...signals];changed[i]='0x'+(BigInt(changed[i])+1n).toString(16);assert.equal(await verifier.verifyProof(a,b,c,changed),false,'mutated signal '+i);}
  const corrupted=[...a];corrupted[0]=ethers.ZeroHash;assert.equal(await verifier.verifyProof(corrupted,b,c,signals),false);
  const proof=ethers.AbiCoder.defaultAbiCoder().encode(['uint256[2]','uint256[2][2]','uint256[2]'],[a,b,c]);
+ // Pairing-preserving re-randomization: e(r*A, r^-1*B) == e(A,B).
+ const curve=await require('ffjavascript').buildBn128(true);let rerandomized;
+ try{
+  const original=require('ffjavascript').utils.unstringifyBigInts(JSON.parse(fs.readFileSync(base+'proof.json'))),r=curve.Fr.e(7);
+  rerandomized={...original,pi_a:curve.G1.toObject(curve.G1.toAffine(curve.G1.timesFr(curve.G1.fromObject(original.pi_a),r))),pi_b:curve.G2.toObject(curve.G2.toAffine(curve.G2.timesFr(curve.G2.fromObject(original.pi_b),curve.Fr.inv(r))))};
+  fs.writeFileSync(base+'rerandomized-proof.json',JSON.stringify(rerandomized,(_,v)=>typeof v==='bigint'?v.toString():v));
+ }finally{await curve.terminate();}
+ assert.match(cli(['groth16','verify',base+'verification_key.json',base+'public.json',base+'rerandomized-proof.json']),/OK/);
+ const [ra,rb,rc,rs]=JSON.parse('['+cli(['zkey','export','soliditycalldata',base+'public.json',base+'rerandomized-proof.json'])+']');
+ assert.equal(await verifier.verifyProof(ra,rb,rc,rs),true);
+ const rerandomizedBytes=ethers.AbiCoder.defaultAbiCoder().encode(['uint256[2]','uint256[2][2]','uint256[2]'],[ra,rb,rc]);
+ assert.notEqual(rerandomizedBytes,proof,'proof bytes can vary for the identical statement');
  const note=ethers.toBeHex(BigInt(commitment),32),spent=ethers.toBeHex(BigInt(nullifier),32);
  await (await engine.connect(alice).approve(await mint.getAddress(),value)).wait();
  await (await mint.connect(alice).lockNote(note,value)).wait();
@@ -51,6 +63,9 @@ test('real Groth16 proof redeems escrow; mutated signals, witnesses and proof fa
  await (await mint.redeemNote(note,spent,await bob.getAddress(),proof)).wait();
  assert.equal(await engine.balances(await bob.getAddress()),1000n);
  assert.equal(await mint.totalEscrowed(),0n);
+ await assert.rejects(()=>mint.redeemNote.staticCall(note,spent,awaitAddress(bob),rerandomizedBytes));
+ assert.equal(await mint.usedNullifiers(spent),true);
+ assert.equal((await mint.notes(note)).locked,false);
  await assert.rejects(()=>mint.redeemNote.staticCall(note,spent,awaitAddress(bob),proof));
  }finally{await rpc.disconnect();}
 });

@@ -25,6 +25,8 @@ PY
 cp -R /opt/protocol/. /work/
 cd /work
 npm run check
+cp build/audit/client-browser.json /evidence/client-browser.json
+cp build/client/manifest.json /evidence/client-manifest.json
 cp build/audit/contracts.json /evidence/contracts.json
 cp build/zk/manifest.json /evidence/zk-manifest.json
 cp build/zk/verification_key.json /evidence/verification_key.json

@@ -31,6 +31,7 @@ jobs:
       - run: npm ci
       - run: npm run test:runtime
       - run: npm run test:contracts
+      - run: npm run test:client:unit
       - run: npm run audit:contracts
       - run: npm run lint:docs
       - run: npm run audit:provenance

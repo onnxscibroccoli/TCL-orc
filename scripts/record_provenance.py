@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 
 ARTIFACTS = [
+    'client/protocol.mjs','client/wallet.mjs','client/prover.worker.mjs','client/view.mjs','client/app.mjs','client/index.html',
+    'scripts/build_client.mjs','tests/client.test.mjs','tests/client-browser.test.cjs',
     'ledger/demurrage.py','ledger/test_demurrage.py',
     'tests/protocol.test.cjs','tests/production-contracts.test.cjs','tests/zk.test.cjs',
     'contracts/CirculatoryEngine.sol','contracts/PhysicalMintController.sol',

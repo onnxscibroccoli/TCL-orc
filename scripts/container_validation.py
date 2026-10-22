@@ -30,6 +30,13 @@ def runtime_command(image,name,evidence):
         '--mount',f'type=bind,src={Path(evidence).resolve()},dst=/evidence',image]
 
 
+def client_runtime_command(image,name,evidence):
+    command=runtime_command(image,name,evidence)
+    command[command.index('--memory=4g')]='--memory=2g'
+    command[-1:-1]=['--env','TCL_CONSTRAINED=1','--entrypoint','bash']
+    return command+['-euc','cp -R /opt/protocol/. /work/; cd /work; npm run zk:setup; npm run client:build; npm run test:client:browser; cp build/audit/client-browser.json /evidence/client-browser.json']
+
+
 def sha(data):return hashlib.sha256(data).hexdigest()
 
 
@@ -65,6 +72,7 @@ def main():
     # Only this synthetic CI output directory is writable; no secrets are mounted.
     artifacts=output/'artifacts';artifacts.mkdir(mode=0o777);artifacts.chmod(0o777)
     name='tcl-validation-'+uuid.uuid4().hex
+    names=[name];artifact_roots={'artifact_sha256':artifacts}
     report={'purpose':'synthetic CI acceptance; not production release approval',
         'revision':revision,'source_archive_sha256':sha(archive),'base_image':args.base_image,'python_image':args.python_image,
         'rootless_security_options':security,'status':'failed'}
@@ -93,26 +101,39 @@ def main():
         if re.search(rb'(?m)^(?:#|\xe2\x84\xb9) skipped [1-9]|\bskipped=[1-9]',result.stdout):
             raise RuntimeError('skipped tests cannot establish container acceptance')
         artifact_hashes(artifacts)
-        for required in ('contracts.json','zk-manifest.json','verification_key.json','python-packages.txt','node-version.txt','python-version.txt'):
+        for required in ('contracts.json','zk-manifest.json','verification_key.json','python-packages.txt','node-version.txt','python-version.txt','client-browser.json','client-manifest.json'):
             if not (artifacts/required).is_file() or not (artifacts/required).stat().st_size:
                 raise ValueError('missing operational evidence: '+required)
+        client_artifacts=output/'client-artifacts';client_artifacts.mkdir(mode=0o777);client_artifacts.chmod(0o777)
+        artifact_roots['client_artifact_sha256']=client_artifacts
+        client_name=name+'-client';names.append(client_name)
+        client_command=client_runtime_command(image,client_name,client_artifacts)
+        client_result=subprocess.run(client_command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=600)
+        (output/'client-validation.log').write_bytes(client_result.stdout)
+        print(client_result.stdout.decode(errors='replace'),end='')
+        report['constrained_client']={'command':client_command,'exit_code':client_result.returncode,
+            'inspect':json.loads(subprocess.check_output(['docker','inspect',client_name]))[0]}
+        if client_result.returncode:raise RuntimeError('two-GiB client acceptance failed')
+        artifact_hashes(client_artifacts)
+        if not (client_artifacts/'client-browser.json').is_file():raise ValueError('missing constrained browser evidence')
         report['status']='passed'
     finally:
-        cleanup=subprocess.run(['docker','rm','-f',name],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-        report['cleanup_exit_code']=cleanup.returncode
-        if cleanup.returncode:
-            report['status']='failed'
-            # Detach the uploader's directory from a possibly live container.
-            quarantine=output.parent/('uncollected-'+uuid.uuid4().hex)
-            artifacts.rename(quarantine);artifacts.mkdir()
-        try:
-            report['artifact_sha256']=artifact_hashes(artifacts)
-        except (ValueError,OSError):
-            # Never leave attacker-created links for the artifact uploader.
-            shutil.rmtree(artifacts);artifacts.mkdir()
-            report['status']='failed';report['unsafe_artifacts_rejected']=True
-        if (output/'validation.log').is_file():
-            report['validation_log_sha256']=sha((output/'validation.log').read_bytes())
+        cleanup_results={}
+        for container in names:
+            cleanup=subprocess.run(['docker','rm','-f',container],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            cleanup_results[container]=cleanup.returncode
+        report['cleanup_exit_codes']=cleanup_results
+        for label,directory in artifact_roots.items():
+            if any(cleanup_results.values()):
+                report['status']='failed'
+                quarantine=output.parent/('uncollected-'+uuid.uuid4().hex)
+                directory.rename(quarantine);directory.mkdir()
+            try:report[label]=artifact_hashes(directory)
+            except (ValueError,OSError):
+                shutil.rmtree(directory);directory.mkdir()
+                report['status']='failed';report['unsafe_artifacts_rejected']=True
+        for log in ('validation.log','client-validation.log'):
+            if (output/log).is_file():report[log+'_sha256']=sha((output/log).read_bytes())
         (output/'provenance.json').write_text(json.dumps(report,sort_keys=True,indent=2)+'\n')
     if report['status']!='passed':raise RuntimeError('container cleanup failed')
 
