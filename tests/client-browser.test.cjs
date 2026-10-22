@@ -11,7 +11,7 @@ const {buildPoseidon}=require('circomlibjs');
 
 test('real browser worker proves and redeems; context, artifact and RPC faults invalidate sessions', {timeout:240000},async()=>{
  const rpc=ganache.provider({logging:{quiet:true},miner:{timestampIncrement:0}});
- const requests=[];let browser,server;
+ const requests=[];let browser,server;const browserHome=fs.mkdtempSync('/tmp/tcl-browser-');
  try{
   const provider=new ethers.BrowserProvider(rpc);provider.pollingInterval=10;
   const gov=await provider.getSigner(0),alice=await provider.getSigner(1),bob=await provider.getSigner(2);
@@ -45,7 +45,7 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
    if(!file.startsWith(path.resolve('build/client')+path.sep)){res.writeHead(403);res.end();return;}
    try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404);res.end();}
   });await new Promise(r=>server.listen(0,'127.0.0.1',r));
-  browser=await chromium.launch({executablePath:process.env.TCL_CHROMIUM||'/usr/bin/chromium',headless:true,args:['--disable-dev-shm-usage']});
+  browser=await chromium.launch({executablePath:process.env.TCL_CHROMIUM||'/usr/bin/chromium',headless:true,env:{...process.env,XDG_CONFIG_HOME:browserHome,XDG_CACHE_HOME:browserHome},args:['--disable-dev-shm-usage']});
   const ui=await browser.newPage();
   await ui.addInitScript(holder=>{
    const listeners={};window.ethereum={on:(event,fn)=>(listeners[event]??=[]).push(fn),removeListener:(event,fn)=>{listeners[event]=(listeners[event]??[]).filter(x=>x!==fn);},request:async args=>{
@@ -118,5 +118,5 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
   if(process.env.TCL_CONSTRAINED==='1'){assert.equal(metrics.containerMemoryMax,String(2*1024**3),'actual two-GiB cgroup');const [quota,period]=metrics.containerCpuMax.split(' ').map(Number);assert.ok(quota/period<=2,'actual CPU quota');}
   fs.mkdirSync('build/audit',{recursive:true});fs.writeFileSync('build/audit/client-browser.json',JSON.stringify(metrics,null,2)+'\n');
   assert.equal(metrics.latencyTargetPassed,true,'requested 4500ms cold worker latency target');
- }finally{await browser?.close();await new Promise(r=>server?server.close(r):r());await rpc.disconnect();}
+ }finally{await browser?.close();await new Promise(r=>server?server.close(r):r());await rpc.disconnect();fs.rmSync(browserHome,{recursive:true,force:true});}
 });

@@ -143,3 +143,11 @@ stages; a Debian system Python must not silently replace the supported runtime.
 Its bounded `/tmp` is 2 GiB to accommodate verified toolchain archive and replica
 copies. The initial 256 MiB allowance failed under real container validation;
 that failure remained a blocked acceptance result rather than being skipped.
+
+The browser-worker client, canonical statement checks, balance display and
+constrained Chromium acceptance are described in the
+[client protocol](docs/14_client_protocol.md).
+The durable operator CLI starts with `bin/tcl-cli health`;
+[architecture](docs/ARCHITECTURE.md), [setup](docs/SETUP.md),
+[API](docs/API.md) and [security boundaries](docs/SECURITY.md) distinguish
+implemented storage and settlement from later Merkle/daemon/worktree migrations.

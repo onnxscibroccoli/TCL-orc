@@ -9,6 +9,10 @@ import json
 from pathlib import Path
 
 ARTIFACTS = [
+    "src/tcl/storage/db.py",
+    "src/tcl/cli.py",
+    "bin/tcl-cli",
+    "tests/test_state_store.py",
     "ledger/demurrage_fixed.py",
     "ledger/nullifiers.py",
     "ledger/test_demurrage_fixed.py",
