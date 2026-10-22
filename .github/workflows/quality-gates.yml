@@ -141,8 +141,12 @@ jobs:
           image="$(docker image inspect node:22-bookworm-slim --format '{{index .RepoDigests 0}}')"
           test -n "$image"
           echo "TCL_VALIDATION_BASE=$image" >> "$GITHUB_ENV"
+          docker pull python:3.12-slim-bookworm
+          python_image="$(docker image inspect python:3.12-slim-bookworm --format '{{index .RepoDigests 0}}')"
+          test -n "$python_image"
+          echo "TCL_VALIDATION_PYTHON=$python_image" >> "$GITHUB_ENV"
       - name: Run full protocol validation offline in rootless container
-        run: python3 scripts/container_validation.py --base-image "$TCL_VALIDATION_BASE" --output build/audit/protocol-validation
+        run: python3 scripts/container_validation.py --base-image "$TCL_VALIDATION_BASE" --python-image "$TCL_VALIDATION_PYTHON" --output build/audit/protocol-validation
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

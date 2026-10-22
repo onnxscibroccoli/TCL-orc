@@ -137,3 +137,9 @@ Operational extensions and their limits are documented in the
 [physical qualification evidence requirements](docs/13_hardware_qualification.md).
 These checks do not replace actual independent ceremony participants, measured
 silicon behavior, custody provisioning or signed external reviews.
+
+The full validation image uses separately digest-pinned Node and Python 3.12
+stages; a Debian system Python must not silently replace the supported runtime.
+Its bounded `/tmp` is 2 GiB to accommodate verified toolchain archive and replica
+copies. The initial 256 MiB allowance failed under real container validation;
+that failure remained a blocked acceptance result rather than being skipped.

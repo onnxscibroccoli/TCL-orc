@@ -26,7 +26,7 @@ def runtime_command(image,name,evidence):
         '--cap-drop=ALL','--security-opt=no-new-privileges','--user=65532:65532',
         '--memory=4g','--cpus=2','--pids-limit=512',
         '--tmpfs','/work:rw,exec,nosuid,size=2g,mode=1777',
-        '--tmpfs','/tmp:rw,exec,nosuid,size=256m,mode=1777',
+        '--tmpfs','/tmp:rw,exec,nosuid,size=2g,mode=1777',
         '--mount',f'type=bind,src={Path(evidence).resolve()},dst=/evidence',image]
 
 
@@ -47,9 +47,10 @@ def artifact_hashes(directory):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-image',required=True)
+    parser.add_argument('--python-image',required=True)
     parser.add_argument('--output',required=True,type=Path)
     args=parser.parse_args()
-    if not re.fullmatch(r'[^\s,@]+@sha256:[a-f0-9]{64}',args.base_image):
+    if not all(re.fullmatch(r'[^\s,@]+@sha256:[a-f0-9]{64}',image) for image in (args.base_image,args.python_image)):
         parser.error('digest-pinned base image required')
     root=Path(__file__).resolve().parents[1]
     def git(*argv):return subprocess.check_output(['git','-C',str(root),*argv])
@@ -65,12 +66,12 @@ def main():
     artifacts=output/'artifacts';artifacts.mkdir(mode=0o777);artifacts.chmod(0o777)
     name='tcl-validation-'+uuid.uuid4().hex
     report={'purpose':'synthetic CI acceptance; not production release approval',
-        'revision':revision,'source_archive_sha256':sha(archive),'base_image':args.base_image,
+        'revision':revision,'source_archive_sha256':sha(archive),'base_image':args.base_image,'python_image':args.python_image,
         'rootless_security_options':security,'status':'failed'}
     try:
         with tempfile.TemporaryDirectory() as tmp:
             iid=Path(tmp)/'image-id'
-            subprocess.run(['docker','build','--build-arg','BASE_IMAGE='+args.base_image,
+            subprocess.run(['docker','build','--build-arg','BASE_IMAGE='+args.base_image,'--build-arg','PYTHON_IMAGE='+args.python_image,
                 '--build-arg','SOURCE_REVISION='+revision,'--build-arg','SOURCE_ARCHIVE_SHA256='+sha(archive),
                 '--iidfile',str(iid),'-f','Containerfile','-'],input=archive,check=True,timeout=1200)
             image=validate_image(iid.read_text().strip());report['image_id']=image
@@ -92,7 +93,7 @@ def main():
         if re.search(rb'(?m)^(?:#|\xe2\x84\xb9) skipped [1-9]|\bskipped=[1-9]',result.stdout):
             raise RuntimeError('skipped tests cannot establish container acceptance')
         artifact_hashes(artifacts)
-        for required in ('contracts.json','zk-manifest.json','verification_key.json','python-packages.txt','node-version.txt'):
+        for required in ('contracts.json','zk-manifest.json','verification_key.json','python-packages.txt','node-version.txt','python-version.txt'):
             if not (artifacts/required).is_file() or not (artifacts/required).stat().st_size:
                 raise ValueError('missing operational evidence: '+required)
         report['status']='passed'

@@ -2,7 +2,8 @@
 # Synthetic operational acceptance only. No production secrets or signing keys.
 set -Eeuo pipefail
 python3 - <<'PY'
-import os, socket
+import os, socket, sys
+assert sys.version_info >= (3,12), "Python 3.12+ required for safe tar extraction"
 from pathlib import Path
 assert os.getuid() == 65532
 status=Path('/proc/self/status').read_text()
@@ -34,3 +35,4 @@ cp build/zk/puf_verify.r1cs /evidence/puf_verify.r1cs
 cp build/zk/puf_verify_js/puf_verify.wasm /evidence/puf_verify.wasm
 pip freeze > /evidence/python-packages.txt
 node --version > /evidence/node-version.txt
+python3 --version > /evidence/python-version.txt
