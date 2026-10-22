@@ -102,6 +102,21 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m pip install -r requirements-production.txt
+      - name: Start delegated user session for rootless cgroups
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dbus-user-session uidmap
+          runner_uid="$(id -u)"
+          runner_user="$(id -un)"
+          sudo loginctl enable-linger "$runner_user"
+          sudo systemctl start "user@${runner_uid}.service"
+          export XDG_RUNTIME_DIR="/run/user/$runner_uid"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          systemctl --user start dbus.socket
+          test -S "$XDG_RUNTIME_DIR/bus"
+          systemctl --user show-environment
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> "$GITHUB_ENV"
       - uses: docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5
         with:
           rootless: true
