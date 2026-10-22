@@ -10,28 +10,36 @@ authors:
     orcid: 0000-0002-1825-0097
 ---
 
-# Multi-Agent Orchestration
+## Multi-Agent Orchestration
 
-The Thresholded Circulatory Ledger coordinates concurrent authoring and runtime operations through an isolated multi-agent worktree orchestrator.
+The Thresholded Circulatory Ledger provides isolated Git worktrees and a durable task-graph runtime for trusted repository commands.
 Each specialized agent is assigned a dedicated Git worktree channel that prevents write conflicts while sharing a single object store.
 The orchestrator maintains a directed acyclic graph of tasks whose nodes include frontmatter validation, architectural synthesis, mathematical formalization, tokenomic modeling, and quality-gate enforcement.
-Agents emit only identifier-based citations and sentence-per-line Markdown so that pull-request diffs remain sentence-granular.
-Cross-agent state is synchronized exclusively through shared citation keys and formally declared invariants rather than mutable global variables.
+Authoring agents should emit only identifier-based citations and sentence-per-line Markdown so that pull-request diffs remain sentence-granular.
+Runtime task state is recorded in SQLite and task lifecycle events are emitted as JSON lines.
+Dependency and source fingerprints prevent completed-task results from silently certifying changed definitions or code.
+The runtime does not yet implement a model-provider adapter.
 
-# Wealth Degradation at the Immunity Threshold
+## Wealth Degradation at the Immunity Threshold
 
 Balances exceeding the personal immunity threshold $T = 5{,}000{,}000$ AETH are subject to continuous demurrage.
-The state transition for an address $i$ over interval $\Delta t$ is given by
+The implemented state transition for an already settled balance over interval $\Delta t$ in days is approximated by fixed-point compounding:
+
 $$
-B_i(t + \Delta t) = B_i(t) + \Delta x_{\text{in}} - \Delta x_{\text{out}} - \max\left(0,\;\delta \cdot (B_i(t) - T) \cdot \Delta t\right)
+B_i(t + \Delta t) = \min(B_i(t),T) + \max(B_i(t)-T,0)\exp(-\delta\Delta t).
 $$
-where $\delta = 0.0005$ day$^{-1}$ is the demurrage decay factor.
-Demurrage is applied only to unshielded or re-entered surplus; offline physical notes and shielded balances below $T$ incur zero degradation.
+
+Transfers first settle the source and destination, then apply their respective debits and credits.
 The extracted surplus is atomically credited to the redistribution pool rather than burned.
+The configured physical-note controller is exempt while its balance backs offline notes.
+The full fixed-point rule and trust boundaries appear in `05_protocol.md`.
+Shielded balances and per-person threshold enforcement remain research goals.
 
-# Automated Asset Redistribution Mechanics
+## Automated Asset Redistribution Mechanics
 
-Surplus extracted by demurrage is deposited into a DemurrageVault.
+Surplus extracted by demurrage is credited to the ledger vault balance.
+The current governor can redistribute that balance to a nonzero recipient.
+The following attestation-weighted allocation describes a future extension rather than implemented behavior.
 A redistribution epoch triggered by the GovernanceOrchestrator or by a scheduled agent allocates the vault balance according to a work-rate parity function.
 The allocation to region $r$ is proportional to verified productive activity recorded by Witness Aggregators:
 $$

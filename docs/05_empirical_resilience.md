@@ -1,7 +1,25 @@
-# Empirical Resilience Additions
+# Empirical resilience acceptance
 
-Demurrage mechanics are now covered by unit tests that run inside a rootless container.
-The Containerfile uses a non-root user and executes pytest with no privileged operations.
-Artifact provenance is recorded as SHA-256 hashes in provenance.json after every change that affects ledger or contract behavior.
-Any Groth16 or circuit change must include a corresponding test that fails closed until the proof verifies.
-Governance gates remain outside the critical path until they have the same test and container coverage.
+The Python demurrage reference is tested directly against deployed local-EVM
+settlement, including exact integer rounding and carried fee remainders.
+It is not a substitute ledger or a proof of Solidity correctness.
+The earlier linear helper was incompatible with compounding and has been replaced.
+The circuit and Solidity demurrage mechanics remain unchanged in this iteration.
+
+`Containerfile` builds a dependency-complete test image from a committed source
+archive and a digest-pinned base image. Actual rootless Docker executes the full
+protocol check offline under a nonroot user, read-only root, no capabilities and
+CPU/memory/PID limits. In-container probes verify effective restrictions.
+Nonroot `USER` metadata alone does not establish rootless daemon execution.
+
+The source `provenance.json` is a checked checksum inventory, not immutable
+storage or execution evidence. Missing files or stale bytes fail verification.
+GitHub's `rootless-protocol-validation` artifact separately records source archive
+and image identities, runtime inspection, logs, generated proof/compiler artifacts
+and the exact exported image for offline replay. It uses synthetic ceremony
+parameters and does not certify an independently operated production ceremony.
+
+Governance authorization, timelock and incident controls remain mandatory and
+are covered by local-EVM regression tests inside the same containerized check.
+Abstract symbolic results are supplemental; they cannot replace runtime evidence.
+No production deployment is authorized by these tests.

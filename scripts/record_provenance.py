@@ -1,36 +1,53 @@
 #!/usr/bin/env python3
-"""Record immutable provenance of key artifacts."""
+"""Checksum inventory verification; CI archive/image provenance supplies run identity.
+
+This mutable file is not a signature, immutable store or execution attestation.
+"""
+import argparse
 import hashlib
 import json
 from pathlib import Path
 
 ARTIFACTS = [
-    "ledger/demurrage.py",
+    "src/tcl/storage/db.py",
+    "src/tcl/cli.py",
+    "bin/tcl-cli",
+    "tests/test_state_store.py",
     "ledger/demurrage_fixed.py",
     "ledger/nullifiers.py",
-    "ledger/test_demurrage.py",
     "ledger/test_demurrage_fixed.py",
     "ledger/test_nullifiers.py",
-    "contracts/CirculatoryEngine.sol",
-    "contracts/PhysicalMintController.sol",
-    "Containerfile",
+    'client/protocol.mjs','client/wallet.mjs','client/prover.worker.mjs','client/view.mjs','client/app.mjs','client/index.html',
+    'scripts/build_client.mjs','tests/client.test.mjs','tests/client-browser.test.cjs',
+    'ledger/demurrage.py','ledger/test_demurrage.py',
+    'tests/protocol.test.cjs','tests/production-contracts.test.cjs','tests/zk.test.cjs',
+    'contracts/CirculatoryEngine.sol','contracts/PhysicalMintController.sol',
+    'contracts/production/ProductionMintController.sol',
+    'contracts/production/ProtocolDeploymentFactory.sol',
+    'contracts/production/ProtocolTimelock.sol','circuits/puf_verify.circom',
+    'Containerfile','production/validate-in-container.sh','scripts/container_validation.py',
+    'production/executor.py','production/ceremony.py','production/ceremony_profile.py',
+    'production/drand.py','production/hardware.py','production/release_gate.py',
+    'scripts/record_provenance.py','package.json','package-lock.json',
+    'requirements-production.txt','requirements-test.txt','verification/requirements.txt',
+    '.github/workflows/quality-gates.yml',
 ]
 
-def sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    h.update(path.read_bytes())
-    return h.hexdigest()
+
+def inventory(root):
+    return {'artifacts':{rel:hashlib.sha256((Path(root)/rel).read_bytes()).hexdigest() for rel in ARTIFACTS}}
+
+
+def check(root,manifest):
+    if manifest!=inventory(root):raise ValueError('stale or incomplete artifact inventory')
+
 
 def main():
-    root = Path(__file__).resolve().parent.parent
-    manifest = {
-        "artifacts": {
-            rel: sha256(root / rel) for rel in ARTIFACTS if (root / rel).exists()
-        }
-    }
-    out = root / "provenance.json"
-    out.write_text(json.dumps(manifest, indent=2) + "\n")
-    print(json.dumps(manifest, indent=2))
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--check',action='store_true')
+    args=parser.parse_args();root=Path(__file__).resolve().parents[1];path=root/'provenance.json'
+    if args.check:
+        check(root,json.loads(path.read_text()));print('Source artifact checksum inventory verified.')
+    else:
+        path.write_text(json.dumps(inventory(root),indent=2)+'\n');print('Updated source checksum inventory; not an execution attestation.')
 
-if __name__ == "__main__":
-    main()
+if __name__=='__main__':main()

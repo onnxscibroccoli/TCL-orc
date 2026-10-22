@@ -1,0 +1,1 @@
+"""Transactional operator state."""

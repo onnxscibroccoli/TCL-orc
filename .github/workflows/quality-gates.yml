@@ -1,118 +1,156 @@
-name: Docs-as-Code Quality Gates
+name: Protocol Verification
 
 on:
   pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'docs/**'
-      - '.github/workflows/quality-gates.yml'
-      - '.vale.ini'
-      - '.markdownlint-cli2.mjs'
+    branches: [main, develop]
   push:
-    branches: [ main ]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protocol-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  markdown-structure-lint:
-    name: Markdown Structure & Accessibility
+  runtime-and-ledger:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install Linting Dependencies
-        run: npm ci || npm install markdownlint-cli2
-
-      - name: Execute Markdownlint-cli2
-        uses: DavidAnson/markdownlint-cli2-action@v24
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
-          config: '.markdownlint-cli2.mjs'
-          globs: 'docs/**/*.md'
+          python-version: '3.12'
+      - run: python3 -m pip install -r requirements-production.txt -r verification/requirements.txt -r requirements-test.txt
+      - run: npm ci
+      - run: npm run test:runtime
+      - run: npm run test:contracts
+      - run: npm run test:client:unit
+      - run: npm run audit:contracts
+      - run: npm run lint:docs
+      - run: npm run audit:provenance
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-contract-audit
+          if-no-files-found: error
+          path: build/audit/contracts.json
 
-  prose-style-lint:
-    name: Prose Style & Terminology
+  real-proof-integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Vale CLI
-        uses: errata-ai/action-vale@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          vale_flags: "--minAlertLevel=warning"
-          filter_mode: added
-          fail_on_error: true
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-  math-katex-verification:
-    name: Formal Math & KaTeX Parsing
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Generate and verify local test ceremony
+        run: npm run zk:setup
+      - name: Prove, mutate, verify, and redeem on local EVM
+        run: npm run test:zk
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          node-version: '20'
+          name: local-test-verifier-manifest
+          if-no-files-found: error
+          path: |
+            build/zk/manifest.json
+            build/zk/PufVerifier.sol
+            build/zk/verification_key.json
 
-      - name: Install KaTeX Parser
-        run: npm install katex
-
-      - name: Run KaTeX Syntax Validator
-        run: node .github/scripts/validate-katex.js
-
-  compile-pdf-artifact:
-    name: Compile Institutional PDF (Pandoc + XeLaTeX)
+  render-specification:
     runs-on: ubuntu-latest
-    needs: [markdown-structure-lint, prose-style-lint, math-katex-verification]
+    timeout-minutes: 15
+    needs: [runtime-and-ledger, real-proof-integration, rootless-execution]
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Install Pandoc & LaTeX Engine
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install document renderer
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic pandoc-citeproc
-
-      - name: Build PDF via XeLaTeX
+          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended
+      - name: Render specification and accessible HTML preview
         run: |
-          mkdir -p build/
-          pandoc docs/00_whitepaper.md \
-            --from=markdown+yaml_metadata_block \
-            --pdf-engine=xelatex \
-            --citeproc \
-            --bibliography=docs/references.bib \
-            --number-sections \
-            --toc \
-            -V geometry:margin=1in \
-            -o build/cryptoeconomic_whitepaper.pdf || true
-
-      - name: Upload PDF Artifact
-        uses: actions/upload-artifact@v4
+          mkdir -p build _site
+          pandoc docs/05_protocol.md --standalone --toc --number-sections \
+            --pdf-engine=xelatex -V geometry:margin=1in -o build/protocol-specification.pdf
+          pandoc docs/05_protocol.md --standalone --toc --mathml \
+            --metadata title='TCL Executable Protocol Specification' -o _site/index.html
+          pandoc docs/06_production_architecture.md --standalone --toc --number-sections \
+            --pdf-engine=xelatex -V geometry:margin=1in -o build/production-architecture.pdf
+          test -s build/production-architecture.pdf
+          test -s build/protocol-specification.pdf
+          test -s _site/index.html
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: whitepaper-pdf
-          path: build/cryptoeconomic_whitepaper.pdf
+          name: protocol-specification
+          if-no-files-found: error
+          path: |
+            build/protocol-specification.pdf
+            build/production-architecture.pdf
+            _site/index.html
 
-  deploy-staging-preview:
-    name: Deploy GitHub Pages Staging Preview
+  rootless-execution:
     runs-on: ubuntu-latest
-    needs: [compile-pdf-artifact]
-    if: github.event_name == 'pull_request'
+    timeout-minutes: 45
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Build Static Site Pages
-        run: |
-          echo "Building HTML artifact for GitHub Pages preview..."
-
-      - name: Upload Deployment Artifacts
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
-          path: '_site/'
+          python-version: '3.12'
+      - run: python3 -m pip install -r requirements-production.txt
+      - name: Start delegated user session for rootless cgroups
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dbus-user-session uidmap
+          runner_uid="$(id -u)"
+          runner_user="$(id -un)"
+          sudo loginctl enable-linger "$runner_user"
+          sudo systemctl start "user@${runner_uid}.service"
+          export XDG_RUNTIME_DIR="/run/user/$runner_uid"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          systemctl --user start dbus.socket
+          test -S "$XDG_RUNTIME_DIR/bus"
+          systemctl --user show-environment
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> "$GITHUB_ENV"
+      - uses: docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5
+        with:
+          rootless: true
+      - name: Resolve disposable test image digest
+        run: |
+          docker pull python:3.12-slim
+          image="$(docker image inspect python:3.12-slim --format '{{index .RepoDigests 0}}')"
+          test -n "$image"
+          echo "TCL_SMOKE_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Verify actual isolation and uncertain-task cleanup
+        run: python3 scripts/container_smoke.py --image "$TCL_SMOKE_IMAGE" --output build/audit/rootless-acceptance.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rootless-container-acceptance
+          if-no-files-found: error
+          path: build/audit/rootless-acceptance.json
+
+      - name: Resolve protocol validation base digest
+        run: |
+          docker pull node:22-bookworm-slim
+          image="$(docker image inspect node:22-bookworm-slim --format '{{index .RepoDigests 0}}')"
+          test -n "$image"
+          echo "TCL_VALIDATION_BASE=$image" >> "$GITHUB_ENV"
+          docker pull python:3.12-slim-bookworm
+          python_image="$(docker image inspect python:3.12-slim-bookworm --format '{{index .RepoDigests 0}}')"
+          test -n "$python_image"
+          echo "TCL_VALIDATION_PYTHON=$python_image" >> "$GITHUB_ENV"
+      - name: Run full protocol validation offline in rootless container
+        run: python3 scripts/container_validation.py --base-image "$TCL_VALIDATION_BASE" --python-image "$TCL_VALIDATION_PYTHON" --output build/audit/protocol-validation
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rootless-protocol-validation
+          if-no-files-found: error
+          path: build/audit/protocol-validation/

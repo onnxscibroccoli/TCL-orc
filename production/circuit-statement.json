@@ -1,0 +1,20 @@
+{
+  "version": "tcl-puf-groth16-v1",
+  "public_signals": ["commitment", "nullifier", "value", "recipient", "context"],
+  "statement": {
+    "proof_system": "Groth16",
+    "curve": "BN254",
+    "field_modulus": "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+    "commitment": "Poseidon(1,secret,blinding,value,context)",
+    "nullifier": "Poseidon(2,secret,commitment,context,recipient)",
+    "context": "uint256(keccak256(abi.encode(chainId,controller))) mod field_modulus",
+    "value_bits": 128,
+    "recipient_bits": 160,
+    "nonzero": ["secret", "value", "recipient"],
+    "primary_replay_barrier": "permanently spent commitment",
+    "demurrage_threshold_base_units": "5000000000000000000000000",
+    "demurrage_daily_rate": "0.0005",
+    "compounding_second_factor": "999999994212962979707861764",
+    "compounding_scale": "1000000000000000000000000000"
+  }
+}

@@ -1,6 +1,8 @@
 # Empirical Resilience — Iteration 2
 
-Fixed-point demurrage now uses a 5th-order Taylor multiplier with a 7-day step bound and a 55-wei truncation correction on daily-or-longer steps.
-Nullifier uniqueness is enforced by a simple integer set; proof-byte hashes are never used for replay protection.
-Both modules have unit tests that run under the existing rootless Containerfile path.
-Groth16 circuit constraints and public-input canonical ordering remain documented only until a reproducible proving pipeline with failing-closed tests exists.
+The fixed-point compatibility helper delegates to the contract-exact integer reference.
+The Taylor polynomial and arbitrary truncation correction were removed because they diverged from the deployed ledger mechanics.
+Use the remainder-aware settlement API for repeated calculations.
+The integer nullifier set is a local demonstration, not persistent or atomic contract storage.
+Actual Groth16 proving, rerandomized replay rejection, governance, and ledger tests execute through the rootless validation pipeline.
+See the client protocol document for current operational acceptance boundaries.
