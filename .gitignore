@@ -147,3 +147,11 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Local protocol execution and private witnesses
+build/
+_site/
+.worktrees/
+.runtime/
+__pycache__/
+*.pyc

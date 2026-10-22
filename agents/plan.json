@@ -1,0 +1,9 @@
+{
+  "tasks": [
+    {"id": "runtime-tests-v2", "command": ["npm", "run", "test:runtime"], "timeout": 120},
+    {"id": "contract-tests-v2", "command": ["npm", "run", "test:contracts"], "timeout": 180},
+    {"id": "zk-setup-v2", "command": ["npm", "run", "zk:setup"], "timeout": 900},
+    {"id": "zk-tests-v2", "depends": ["zk-setup-v2", "contract-tests-v2"], "command": ["npm", "run", "test:zk"], "timeout": 240},
+    {"id": "documentation-v2", "depends": ["runtime-tests-v2", "zk-tests-v2"], "command": ["npm", "run", "lint:docs"], "timeout": 120}
+  ]
+}

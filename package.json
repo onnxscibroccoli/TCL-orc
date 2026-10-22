@@ -1,8 +1,29 @@
 {
   "name": "tcl-orchestrator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Prototype multi-agent orchestration and demurrage redistribution for Thresholded Circulatory Ledger",
   "scripts": {
-    "orchestrate": "python3 agents/orchestrator.py"
+    "orchestrate": "python3 agents/orchestrator.py",
+    "test": "npm run test:runtime && npm run test:contracts && npm run test:zk && npm run lint:docs",
+    "test:runtime": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "test:contracts": "node --test tests/protocol.test.cjs",
+    "zk:setup": "bash scripts/zk-setup.sh",
+    "test:zk": "node --test tests/zk.test.cjs",
+    "lint:docs": "markdownlint-cli2 && node .github/scripts/validate-katex.js",
+    "check": "npm run zk:setup && npm test"
+  },
+  "devDependencies": {
+    "circom2": "0.2.22",
+    "circomlib": "2.0.5",
+    "circomlibjs": "0.1.7",
+    "ethers": "6.15.0",
+    "ganache": "7.9.2",
+    "katex": "0.16.22",
+    "markdownlint-cli2": "0.18.1",
+    "snarkjs": "0.7.6",
+    "solc": "0.8.30"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

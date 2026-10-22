@@ -1,118 +1,83 @@
-name: Docs-as-Code Quality Gates
+name: Protocol Verification
 
 on:
   pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'docs/**'
-      - '.github/workflows/quality-gates.yml'
-      - '.vale.ini'
-      - '.markdownlint-cli2.mjs'
+    branches: [main, develop]
   push:
-    branches: [ main ]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protocol-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  markdown-structure-lint:
-    name: Markdown Structure & Accessibility
+  runtime-and-ledger:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install Linting Dependencies
-        run: npm ci || npm install markdownlint-cli2
-
-      - name: Execute Markdownlint-cli2
-        uses: DavidAnson/markdownlint-cli2-action@v24
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
         with:
-          config: '.markdownlint-cli2.mjs'
-          globs: 'docs/**/*.md'
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run test:runtime
+      - run: npm run test:contracts
+      - run: npm run lint:docs
 
-  prose-style-lint:
-    name: Prose Style & Terminology
+  real-proof-integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Vale CLI
-        uses: errata-ai/action-vale@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          vale_flags: "--minAlertLevel=warning"
-          filter_mode: added
-          fail_on_error: true
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-  math-katex-verification:
-    name: Formal Math & KaTeX Parsing
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Generate and verify local test ceremony
+        run: npm run zk:setup
+      - name: Prove, mutate, verify, and redeem on local EVM
+        run: npm run test:zk
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: '20'
+          name: local-test-verifier-manifest
+          if-no-files-found: error
+          path: |
+            build/zk/manifest.json
+            build/zk/PufVerifier.sol
+            build/zk/verification_key.json
 
-      - name: Install KaTeX Parser
-        run: npm install katex
-
-      - name: Run KaTeX Syntax Validator
-        run: node .github/scripts/validate-katex.js
-
-  compile-pdf-artifact:
-    name: Compile Institutional PDF (Pandoc + XeLaTeX)
+  render-specification:
     runs-on: ubuntu-latest
-    needs: [markdown-structure-lint, prose-style-lint, math-katex-verification]
+    timeout-minutes: 15
+    needs: [runtime-and-ledger, real-proof-integration]
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Install Pandoc & LaTeX Engine
+      - uses: actions/checkout@v4
+      - name: Install document renderer
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic pandoc-citeproc
-
-      - name: Build PDF via XeLaTeX
+          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended
+      - name: Render specification and accessible HTML preview
         run: |
-          mkdir -p build/
-          pandoc docs/00_whitepaper.md \
-            --from=markdown+yaml_metadata_block \
-            --pdf-engine=xelatex \
-            --citeproc \
-            --bibliography=docs/references.bib \
-            --number-sections \
-            --toc \
-            -V geometry:margin=1in \
-            -o build/cryptoeconomic_whitepaper.pdf || true
-
-      - name: Upload PDF Artifact
-        uses: actions/upload-artifact@v4
+          mkdir -p build _site
+          pandoc docs/05_protocol.md --standalone --toc --number-sections \
+            --pdf-engine=xelatex -V geometry:margin=1in -o build/protocol-specification.pdf
+          pandoc docs/05_protocol.md --standalone --toc --mathml \
+            --metadata title='TCL Executable Protocol Specification' -o _site/index.html
+          test -s build/protocol-specification.pdf
+          test -s _site/index.html
+      - uses: actions/upload-artifact@v4
         with:
-          name: whitepaper-pdf
-          path: build/cryptoeconomic_whitepaper.pdf
-
-  deploy-staging-preview:
-    name: Deploy GitHub Pages Staging Preview
-    runs-on: ubuntu-latest
-    needs: [compile-pdf-artifact]
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Build Static Site Pages
-        run: |
-          echo "Building HTML artifact for GitHub Pages preview..."
-
-      - name: Upload Deployment Artifacts
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '_site/'
+          name: protocol-specification
+          if-no-files-found: error
+          path: |
+            build/protocol-specification.pdf
+            _site/index.html
