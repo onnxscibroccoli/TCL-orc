@@ -13,8 +13,8 @@ document.getElementById('connect').addEventListener('click',async()=>{
  try{
   if(!window.ethereum)throw Error('An injected EIP-1193 wallet is required.');
   const response=await fetch('./deployment.json',{cache:'no-store'});if(!response.ok)throw Error('Install the independently verified deployment policy first.');
-  const policy=await response.json();client?.close();clearInterval(timer);client=new WalletClient(window.ethereum,policy);
-  const accounts=await window.ethereum.request({method:'eth_requestAccounts'});const snapshot=await client.readBalance(accounts[0]);
+  const policy=await response.json();if(current!==generation)return;client?.close();clearInterval(timer);client=new WalletClient(window.ethereum,policy);
+  const accounts=await window.ethereum.request({method:'eth_requestAccounts'});if(current!==generation)return;const snapshot=await client.readBalance(accounts[0]);
   if(current!==generation)return;const started=performance.now();const render=()=>renderBalance(document,snapshot,Math.floor((performance.now()-started)/1000));render();timer=setInterval(render,1000);
   status.textContent='Connected. Read-only view; no transaction has been requested.';
  }catch(error){if(current!==generation)return;client?.close();clearInterval(timer);status.textContent=error.message;}

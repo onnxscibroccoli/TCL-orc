@@ -53,8 +53,13 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
     const response=await(await fetch('/rpc',{method:'POST',body:JSON.stringify(args)})).json();if(response.error)throw Error(response.error);return response.result;
    }};window.switchAccount=()=>{for(const fn of [...listeners.accountsChanged??[]])fn([]);};
   },await alice.getAddress());
+  let firstPolicy,policyCalls=0;await ui.route('**/deployment.json',async route=>{policyCalls++;if(policyCalls===1){firstPolicy=route;return;}await route.fulfill({json:policy});});
   await ui.goto('http://127.0.0.1:'+server.address().port+'/index.html');await ui.locator('#connect').click();
+  while(!firstPolicy)await new Promise(r=>setTimeout(r,5));await ui.locator('#connect').click();
   await ui.waitForFunction(()=>document.getElementById('status').textContent.startsWith('Connected.'));
+  const readsBefore=requests.filter(x=>x.url==='/rpc').length;await firstPolicy.fulfill({json:policy});
+  await ui.waitForFunction(()=>performance.getEntriesByType('resource').filter(x=>x.name.endsWith('/deployment.json')).length===2);
+  assert.equal(requests.filter(x=>x.url==='/rpc').length,readsBefore,'obsolete connect must not replace live session');
   await ui.evaluate(()=>window.switchAccount());assert.equal(await ui.locator('#committed').textContent(),'Unavailable');
   assert.match(await ui.locator('#status').textContent(),/context changed/);await ui.close();
   const page=await browser.newPage();const origin='http://127.0.0.1:'+server.address().port;
