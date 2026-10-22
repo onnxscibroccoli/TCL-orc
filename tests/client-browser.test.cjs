@@ -78,14 +78,23 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
    const rejectedProof=await rejected.prove(bytes((BigInt(blinding)+1n).toString()),note2,recipient,{timeoutMs:30000});let rpcRejected=false;
    try{await rejected.submit(recipient);}catch{rpcRejected=true;}const state=rejected.state;
    let regenerationRequired=false;try{await rejected.prove(bytes(),note,recipient);}catch{regenerationRequired=true;}rejected.close();
-   return{tx,proof,concurrentBlocked,inflightProofBlocked,rejectedSignals:rejectedProof.signals,repeatBlocked,artifactRejected,timeoutRejected,chainRejected,rpcRejected,regenerationRequired,state,ticks};
+   let lostHash;const lost=new WalletClient({...provider,request:async args=>{
+    const result=await provider.request(args);
+    if(args.method==='eth_sendTransaction'){lostHash=result;throw Error('response lost after accepted send');}
+    return result;
+   }},policy);
+   await lost.prove(bytes((BigInt(blinding)+1n).toString()),note2,recipient,{timeoutMs:30000});
+   let acceptedResponseLost=false;try{await lost.submit(recipient);}catch{acceptedResponseLost=lost.state==='uncertain'&&!!lostHash;}
+   let lostRepeatBlocked=false;try{await lost.submit(recipient);}catch{lostRepeatBlocked=true;}
+   lost.close();
+   return{tx,proof,lostHash,acceptedResponseLost,lostRepeatBlocked,concurrentBlocked,inflightProofBlocked,rejectedSignals:rejectedProof.signals,repeatBlocked,artifactRejected,timeoutRejected,chainRejected,rpcRejected,regenerationRequired,state,ticks};
   },{policy,note:{commitment,value,context},note2:{commitment:commitment2,value,context},recipient,secret,blinding,holder:await alice.getAddress()});
-  for(const k of ['concurrentBlocked','inflightProofBlocked','repeatBlocked','artifactRejected','timeoutRejected','chainRejected','rpcRejected','regenerationRequired'])assert.equal(result[k],true,k);
-  assert.equal(result.state,'uncertain');assert.equal(await engine.balances(recipient),1000n);assert.equal(await mint.totalEscrowed(),1000n);
-  assert.equal((await mint.notes(ethers.toBeHex(BigInt(commitment2),32))).locked,true);
-  assert.equal(await mint.usedNullifiers(ethers.toBeHex(BigInt(result.rejectedSignals[1]),32)),false);
+  for(const k of ['acceptedResponseLost','lostRepeatBlocked','concurrentBlocked','inflightProofBlocked','repeatBlocked','artifactRejected','timeoutRejected','chainRejected','rpcRejected','regenerationRequired'])assert.equal(result[k],true,k);
+  assert.equal(result.state,'uncertain');assert.equal(await engine.balances(recipient),2000n);assert.equal(await mint.totalEscrowed(),0n);
+  assert.equal((await mint.notes(ethers.toBeHex(BigInt(commitment2),32))).locked,false);
+  assert.equal(await mint.usedNullifiers(ethers.toBeHex(BigInt(result.rejectedSignals[1]),32)),true);
   assert.equal((await provider.getTransactionReceipt(result.tx)).status,1);
-  assert.equal(requests.filter(r=>r.body&&JSON.parse(r.body).method==='eth_sendTransaction').length,1,'no automatic transaction resubmission');
+  assert.equal(requests.filter(r=>r.body&&JSON.parse(r.body).method==='eth_sendTransaction').length,2,'one send per note and no automatic transaction resubmission');
   for(const req of requests){assert.ok(!req.body?.includes(secret)&&!req.body?.includes(blinding),'private witness leaked to RPC');assert.ok(req.url!=='/private');}
   const metrics={purpose:'synthetic browser-worker acceptance; not PUF or production custody qualification',elapsedMs:result.proof.elapsedMs,latencyTargetMs:4500,latencyTargetPassed:result.proof.elapsedMs<4500,mainThreadTicks:result.ticks,browserVersion:await browser.version(),browserSandbox:'Playwright CI default; outer rootless OCI isolation is required',faults:{artifact:true,timeout:true,chain:true,rpc:true},networkRequests:requests.length,proofSha256:require('node:crypto').createHash('sha256').update(result.proof.proof).digest('hex'),workerMemoryLimit:'Browser API supplies no hard per-worker RAM cap; 256 MiB target not certified'};
   for(const [key,file] of Object.entries({containerMemoryMax:'/sys/fs/cgroup/memory.max',containerMemoryPeak:'/sys/fs/cgroup/memory.peak',containerCpuMax:'/sys/fs/cgroup/cpu.max'}))if(fs.existsSync(file))metrics[key]=fs.readFileSync(file,'utf8').trim();
