@@ -1,0 +1,8 @@
+{
+  "name": "tcl-orchestrator",
+  "version": "0.1.0",
+  "description": "Prototype multi-agent orchestration and demurrage redistribution for Thresholded Circulatory Ledger",
+  "scripts": {
+    "orchestrate": "python3 agents/orchestrator.py"
+  }
+}
