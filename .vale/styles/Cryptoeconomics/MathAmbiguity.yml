@@ -1,0 +1,11 @@
+extends: existence
+message: "Avoid vague economic qualifiers like '%s'. Use explicit mathematical parameters or dynamic ranges."
+level: error
+scope: sentence
+ignorecase: true
+tokens:
+  - huge yield
+  - high throughput
+  - completely safe
+  - practically zero cost
+  - guaranteed profit

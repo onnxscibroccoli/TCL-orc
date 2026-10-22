@@ -1,0 +1,6 @@
+extends: existence
+message: "OSPL Violation: Multiple sentences detected on a single line. Place each sentence on its own line."
+level: error
+scope: line
+tokens:
+  - '[a-z0-9][.!?]\s+[A-Z]'
