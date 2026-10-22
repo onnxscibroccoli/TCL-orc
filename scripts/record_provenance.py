@@ -6,7 +6,11 @@ from pathlib import Path
 
 ARTIFACTS = [
     "ledger/demurrage.py",
+    "ledger/demurrage_fixed.py",
+    "ledger/nullifiers.py",
     "ledger/test_demurrage.py",
+    "ledger/test_demurrage_fixed.py",
+    "ledger/test_nullifiers.py",
     "contracts/CirculatoryEngine.sol",
     "contracts/PhysicalMintController.sol",
     "Containerfile",

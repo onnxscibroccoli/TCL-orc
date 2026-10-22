@@ -1,7 +1,11 @@
 {
   "artifacts": {
     "ledger/demurrage.py": "8bf9eae4c3b1f80487768a583c1783567e08d6636a9a6b4d65bc485c41dbb405",
+    "ledger/demurrage_fixed.py": "14edca1ba3372e13b81f1e9fe550eeeff6a70811cf93543d3a00d910e8a31b5a",
+    "ledger/nullifiers.py": "521754bdd122dfb0366384a45d08ceadb59aee192d88b627611f49a6883299a9",
     "ledger/test_demurrage.py": "caf0f59c0080cbf67855337a8c8139eb03ff49187dea34518f585b1763940233",
+    "ledger/test_demurrage_fixed.py": "ea3530cdc20e64e3268f0ac85d99e37a9f485916e2eec287d563340e9697c73d",
+    "ledger/test_nullifiers.py": "7371eb192a10c4687695a9fa1cb8cdcabacb945e5c555ddf63c11f67c07a0791",
     "contracts/CirculatoryEngine.sol": "32491ff212d01eeef8c5e03be074cb912765bd3b6285ed154d3b60df4e13f655",
     "contracts/PhysicalMintController.sol": "a8745c014e10cc5fdd56ac2822d0417ce8a242729fc430f858193271e8b7dedc",
     "Containerfile": "6dd48c3de8acf3b02539eafcdc69fc76f75beb3e2cc4b7e2f58e9cd990d72228"
