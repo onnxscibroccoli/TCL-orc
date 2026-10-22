@@ -84,7 +84,10 @@ export class WalletClient {
    const current=await this.binding();if(saved.epoch!==this.#epoch||JSON.stringify(current)!==JSON.stringify(saved.binding))throw Error('INVALID_GROTH16_CONTEXT');
    const [commitment,nullifier,,recipient]=saved.signals;
    const tx={from:getAddress(from),to:current.controller,chainId:toQuantity(BigInt(current.chainId)),data:controllerABI.encodeFunctionData('redeemNote',[toBeHex(BigInt(commitment),32),toBeHex(BigInt(nullifier),32),toBeHex(BigInt(recipient),20),saved.proof])};
-   await this.#request({method:'eth_estimateGas',params:[tx]});
+   const estimate=BigInt(await this.#request({method:'eth_estimateGas',params:[tx]}));
+   const gas=(estimate*120n+99n)/100n,maximum=BigInt(this.#policy.maxGas??'5000000');
+   if(estimate<=0n||gas>maximum||maximum>30000000n)throw Error('GAS_BUDGET_EXCEEDED');
+   tx.gas=toQuantity(gas);
    if(saved.epoch!==this.#epoch)throw Error('INVALID_GROTH16_CONTEXT');
    const hash=await this.#request({method:'eth_sendTransaction',params:[tx]});
    if(this.#closed||saved.epoch!==this.#epoch)throw Error('CONTEXT_CHANGED_DURING_SEND');

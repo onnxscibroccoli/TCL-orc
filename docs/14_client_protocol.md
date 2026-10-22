@@ -60,3 +60,8 @@ Fault checks cover artifact corruption, worker timeout, context invalidation, co
 Immutable image export, command records, runtime inspection, source hashes, and digest manifests accompany the existing replay evidence.
 New code is not empirically accepted until those rootless jobs pass for its exact commit.
 P2P partition recovery, 64-node stress, 100 TPS, physical PUF reliability, and mainnet readiness are not measured by this client harness.
+
+The default RPC deadline is 10 seconds and the default submission gas ceiling is 5,000,000.
+A verified estimate receives a 20 percent margin and must remain under the policy ceiling, which cannot exceed 30,000,000.
+The synthetic Ganache browser fixture allows 60 seconds per RPC because real pairing-based gas estimation measured over 14 seconds in a direct reproduction.
+This fixture override does not alter the 4,500-millisecond worker proof benchmark or claim a production RPC latency guarantee.

@@ -30,7 +30,7 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
   await(await engine.connect(alice).approve(await mint.getAddress(),2000)).wait();
   for(const cm of [commitment,commitment2])await(await mint.connect(alice).lockNote(ethers.toBeHex(BigInt(cm),32),value)).wait();
   await rpc.request({method:'evm_increaseTime',params:[86400]});await rpc.request({method:'evm_mine',params:[]});
-  const policy={ledgerCodeHash:ethers.keccak256(await provider.getCode(await engine.getAddress())),chainId:(await provider.getNetwork()).chainId.toString(),controller:await mint.getAddress(),controllerCodeHash:ethers.keccak256(await provider.getCode(await mint.getAddress())),verifier:await verifier.getAddress(),verifierCodeHash:ethers.keccak256(await provider.getCode(await verifier.getAddress())),assets:JSON.parse(fs.readFileSync('build/client/assets.json'))};
+  const policy={rpcTimeoutMs:60000,ledgerCodeHash:ethers.keccak256(await provider.getCode(await engine.getAddress())),chainId:(await provider.getNetwork()).chainId.toString(),controller:await mint.getAddress(),controllerCodeHash:ethers.keccak256(await provider.getCode(await mint.getAddress())),verifier:await verifier.getAddress(),verifierCodeHash:ethers.keccak256(await provider.getCode(await verifier.getAddress())),assets:JSON.parse(fs.readFileSync('build/client/assets.json'))};
   server=http.createServer(async(req,res)=>{
    const entry={method:req.method,url:req.url};requests.push(entry);
    res.setHeader('Cache-Control','no-store');
@@ -39,7 +39,7 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
     let text='';for await(const b of req){text+=b;if(text.length>20000){res.writeHead(413);res.end();return;}}
     entry.body=text;
     try{const args=JSON.parse(text);if(!['eth_chainId','eth_getCode','eth_call','eth_getBlockByNumber','eth_estimateGas','eth_sendTransaction'].includes(args.method))throw Error();const result=await rpc.request(args);res.setHeader('Content-Type','application/json');res.end(JSON.stringify({result}));}
-    catch{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:'RPC_REJECTED'}));}return;
+    catch(error){console.error(JSON.stringify({event:'synthetic_rpc_rejection',message:error.message,code:error.code}));res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:'RPC_REJECTED'}));}return;
    }
    const file=path.resolve('build/client','.'+req.url.split('?')[0]);
    if(!file.startsWith(path.resolve('build/client')+path.sep)){res.writeHead(403);res.end();return;}
@@ -112,6 +112,7 @@ test('real browser worker proves and redeems; context, artifact and RPC faults i
   assert.equal(await mint.usedNullifiers(ethers.toBeHex(BigInt(result.rejectedSignals[1]),32)),true);
   assert.equal((await provider.getTransactionReceipt(result.tx)).status,1);
   assert.equal(requests.filter(r=>r.body&&JSON.parse(r.body).method==='eth_sendTransaction').length,2,'one send per note and no automatic transaction resubmission');
+  for(const req of requests.filter(r=>r.body&&JSON.parse(r.body).method==='eth_sendTransaction'))assert.ok(BigInt(JSON.parse(req.body).params[0].gas)>90000n,'explicit bounded proof verification gas budget');
   for(const req of requests){assert.ok(!req.body?.includes(secret)&&!req.body?.includes(blinding),'private witness leaked to RPC');assert.ok(req.url!=='/private');}
   const metrics={purpose:'synthetic browser-worker acceptance; not PUF or production custody qualification',elapsedMs:result.proof.elapsedMs,latencyTargetMs:4500,latencyTargetPassed:result.proof.elapsedMs<4500,mainThreadTicks:result.ticks,browserVersion:await browser.version(),browserSandbox:'Playwright CI default; outer rootless OCI isolation is required',faults:{artifact:true,timeout:true,chain:true,rpc:true},networkRequests:requests.length,proofSha256:require('node:crypto').createHash('sha256').update(result.proof.proof).digest('hex'),workerMemoryLimit:'Browser API supplies no hard per-worker RAM cap; 256 MiB target not certified'};
   for(const [key,file] of Object.entries({containerMemoryMax:'/sys/fs/cgroup/memory.max',containerMemoryPeak:'/sys/fs/cgroup/memory.peak',containerCpuMax:'/sys/fs/cgroup/cpu.max'}))if(fs.existsSync(file))metrics[key]=fs.readFileSync(file,'utf8').trim();
