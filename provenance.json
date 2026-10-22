@@ -1,5 +1,9 @@
 {
   "artifacts": {
+    "ledger/demurrage_fixed.py": "910ecb23ff7fd7eb0e89da4356dcfbf0a52191ef8e3952f4eb8509400762a927",
+    "ledger/nullifiers.py": "521754bdd122dfb0366384a45d08ceadb59aee192d88b627611f49a6883299a9",
+    "ledger/test_demurrage_fixed.py": "ea3530cdc20e64e3268f0ac85d99e37a9f485916e2eec287d563340e9697c73d",
+    "ledger/test_nullifiers.py": "7371eb192a10c4687695a9fa1cb8cdcabacb945e5c555ddf63c11f67c07a0791",
     "client/protocol.mjs": "3e08a7067af0fd9184be1085aeb97ae92eafffc05b954ec60415393d75516b39",
     "client/wallet.mjs": "eac66cdeb338aa369c8777bc9666ea86bcb94ae7c3f3d460273774f5944488ee",
     "client/prover.worker.mjs": "cd3e792763735aeee6ddadf378a3b6844a657563179edffecd2bec9688e6977b",
@@ -29,8 +33,8 @@
     "production/drand.py": "5e80c24ad4afb2a30af4955b975d4004dcc88351d4f34a95ebcb7588fd4d126e",
     "production/hardware.py": "102c6ea9a0a58498a147d6436b91bc9efd473b6cb5c886be73469cba4f9dd2d7",
     "production/release_gate.py": "3ab0948605b5612e5f47fff3e07cd19b50ee1dc77401d8b05d4cb2931b3bcf0f",
-    "scripts/record_provenance.py": "272d17893460a48671ad5d58d5263a447ad1148a9e0fd2add062e9a0a49b8086",
-    "package.json": "f7863ce04bb9ab8dfa2c268df1940bf670832660cb60a6c105f1978421d56c01",
+    "scripts/record_provenance.py": "7efd1e129707306859d6cd2fafbcdd4c178f888958960d3639052779cd88b6e2",
+    "package.json": "df1207e842c6e502949589a0d13e63165efd225e010d9b242ba6b4af1f7c827b",
     "package-lock.json": "af6b7ed7af1812c0d7a4fbdea4cdb6b54da1eb461b95f72144c245b1dec0ac75",
     "requirements-production.txt": "161107d148f05340121ee740f73a2484451ce1e9acfd2cc3ff4c42cf8df7fa2f",
     "requirements-test.txt": "a0e201ecda2bc871726ea3bb5db9cfe6b2109f60d8da88eecf910b790794b03d",

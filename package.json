@@ -5,7 +5,7 @@
   "scripts": {
     "orchestrate": "python3 agents/orchestrator.py",
     "test": "npm run test:runtime && npm run test:contracts && npm run test:zk && npm run test:client && npm run audit:contracts && npm run lint:docs && npm run audit:provenance",
-    "test:runtime": "python3 -m unittest discover -s tests -p 'test_*.py' && python3 -m pytest -q ledger/test_demurrage.py",
+    "test:runtime": "python3 -m unittest discover -s tests -p 'test_*.py' && python3 -m pytest -q ledger",
     "test:contracts": "node --test tests/protocol.test.cjs tests/production-contracts.test.cjs",
     "zk:setup": "bash scripts/zk-setup.sh",
     "test:zk": "node --test tests/zk.test.cjs",
