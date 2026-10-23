@@ -7,6 +7,8 @@ COPY pyproject.toml requirements-test.txt /app/
 COPY src/ /app/src/
 COPY ledger/ /app/ledger/
 COPY tests/ /app/tests/
+COPY test/ /app/test/
+COPY config.yaml .env.example /app/
 
 RUN pip install --no-cache-dir -r requirements-test.txt && pip install --no-cache-dir /app
 
