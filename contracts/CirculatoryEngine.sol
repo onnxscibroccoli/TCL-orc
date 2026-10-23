@@ -91,7 +91,7 @@ contract CirculatoryEngine is
         uint256 genesisRoot,
         uint64 genesisTime
     ) external initializer {
-        if (address(verifier_) == address(0)) revert ZeroAddress();
+        if (owner_ == address(0) || address(verifier_) == address(0)) revert ZeroAddress();
         if (ratePerSecond_ > RATE_SCALE) revert RateTooHigh();
         if (genesisRoot >= SNARK_FIELD) revert SignalOutOfField(2);
         __Ownable_init(owner_);
@@ -129,6 +129,7 @@ contract CirculatoryEngine is
     }
 
     function _fee(uint256 balance, uint256 dt) internal view returns (uint256) {
+        // slither-disable-next-line incorrect-equality,timestamp
         if (balance <= threshold || dt == 0) return 0;
         uint256 surplus = balance - threshold;
         uint256 f = (surplus * ratePerSecond * dt) / RATE_SCALE;
