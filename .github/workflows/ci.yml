@@ -264,7 +264,7 @@ jobs:
           node-version: "20"
           cache: npm
       - run: pip install pip-audit==2.7.3
-      - name: pip-audit (hash-free pinned lock: requirements-test.lock)
+      - name: pip-audit over pinned requirements-test.lock
         run: pip-audit -r requirements-test.lock --strict --no-deps --disable-pip
       - name: npm audit (lockfile, high+)
         run: npm audit --audit-level=high
