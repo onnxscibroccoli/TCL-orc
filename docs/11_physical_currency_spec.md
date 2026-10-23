@@ -1,7 +1,7 @@
 # 11 — Physical Currency, Minting, Mining and Governance Specification
 
 > [!WARNING]
-> **DRAFT — NOT IMPLEMENTED.** This document is a design specification under discussion. Nothing described here exists in `main`. Formulas, parameters and default values are proposals and will change after the pending research (see [§13](#13-pending-research-awaiting-gemini-results)) is returned. Where this draft conflicts with code, the code is authoritative for what currently runs.
+> **DRAFT — NOT IMPLEMENTED.** This document is a design specification under discussion. Nothing described here exists in `main`. Formulas, parameters and default values are proposals and will change after owner review of the research-driven decisions (see [§12](#12-decisions-proposed-pending-owner-confirmation)). Where this draft conflicts with code, the code is authoritative for what currently runs.
 
 ## Contents
 
@@ -16,8 +16,9 @@
 9. [Shared incentive pool, emission and conservation](#9-shared-incentive-pool-emission-and-conservation)
 10. [Governance and anti-capture](#10-governance-and-anti-capture)
 11. [Threat model](#11-threat-model)
-12. [Open questions](#12-open-questions)
-13. [Pending research (awaiting Gemini results)](#13-pending-research-awaiting-gemini-results)
+12. [Decisions (proposed, pending owner confirmation)](#12-decisions-proposed-pending-owner-confirmation)
+13. [Open questions (still unresolved)](#13-open-questions-still-unresolved)
+14. [Research received](#14-research-received)
 
 ---
 
@@ -153,6 +154,29 @@ Two options were considered after re-entry:
 
 **Recommendation: Option A.** A DORMANT note is re-armed to LIVE by a mint event (§7), which burns $`V_d`$ digital and sets $`\mathsf{leaf}_{\mathsf{id}} \leftarrow H(11, \mathsf{id}, k{+}1, \textsf{LIVE}, t_{\mathrm{now}}, 0)`$. The SE accepts the re-arm only with a ledger-signed (or proof-carrying) receipt for era $`k{+}1`$. Reasons: it reuses durable hardware, which is the point of reusable cash; the era counter makes stale-era replays impossible; and linkability is limited to the minter and depositor, never the intermediate holders. Option B remains for worn or damaged notes.
 
+### 4.6 Research integration (Part A)
+
+Source: Gemini deep research (user-supplied, 2026-10-23, master), Part A. Claims marked † need primary sources.
+
+**Hardware survey, as summarized from the report:**
+
+- Optical PUFs: random light-scattering particles in the substrate, read with a phone flash.
+- Coating PUFs: a particle matrix over the chip that is destroyed by decapping.
+- SRAM PUFs: power-up state of the chip's memory; need a fuzzy extractor.
+- RF PUFs: antenna impedance signatures.
+- NXP NTAG 424 DNA: AES-128 CMAC "SUN" messages with a tap counter, about \$0.20–0.35.
+- Asymmetric secure elements (NXP SE050, Infineon SLE78): about \$1.10–1.80.
+- Prior art: transferable e-cash (Chaum; Brands; Okamoto–Ohta; Baldimtsi et al.) and hardware-enforced offline CBDC pilots (ECB digital euro offline, BIS Project Polaris, e-CNY hardware wallets).
+
+The report proposes a commitment $`C_{\mathrm{note}} = H(\mathsf{NoteID}, S_{\mathrm{secret}})`$, a deposit nullifier $`N_{\mathrm{dep}} = H(S_{\mathrm{secret}}, \mathsf{DepositNonce})`$, and re-arming by writing a new secret $`S'`$ to the SE.
+
+**Assessment:**
+
+1. **Error: the nullifier as given allows double deposits.** With a free $`\mathsf{DepositNonce}`$, one commitment yields unlimited distinct nullifiers. A nullifier must be a deterministic function of the commitment and era. This spec keeps $`\mathsf{nf}_{\mathsf{id},k} = H(12, \mathsf{id}, k, \mathsf{ctx})`$ (§4.4). The report's secret rotation $`S \to S'`$ is adopted as an option, *in addition* to the era counter: the leaf becomes $`H(11, \mathsf{id}, k, \sigma, t_{\mathrm{mint}}, g, H(S_k))`$.
+2. **Error: NTAG 424 DNA cannot support offline verification by strangers.** SUN/CMAC is symmetric, so a phone can verify offline only if it holds the AES key, and anyone with the key can forge a tag. **This spec requires an asymmetric SE** (SE050/SLE78 class) for offline checks. NTAG-class chips are acceptable only for online checks.
+3. **Re-arm payload.** A public EVM contract cannot send a confidential "encrypted re-arming payload". The re-arm secret must be generated *on the SE* (or by the minter's device), and only $`H(S')`$ is published.
+4. **Claims marked †:** BN254 support on the SE050; optical PUF entropy "$`\gt 10^6`$ bits/mm²"; clone-cost figures.
+
 ---
 
 ## 5. No demurrage while physical
@@ -164,6 +188,20 @@ While $`\sigma = \textsf{LIVE}`$, a note carries face value $`V_d`$ unchanged:
 ```
 
 There is no charge for holding notes off network and no charge based on how long a note was held. Anti-hoarding acts only on what happens *after* re-entry (§6).
+
+### 5.1 Research integration (Part B): rejected holding-duration penalty
+
+Part B surveys Gesell's *Freigeld*, Wörgl (1932–33, 1%/month stamp scrip), the Wära experiments and 1930s US stamp scrip. Reported Wörgl outcomes (about 20× velocity, back taxes up 35%, unemployment down 25%) are † and need primary sources. The lesson that manual stamping added friction supports §5's choice: no decay at all on physical notes.
+
+The report then proposes a re-entry penalty based on how long the note was held:
+
+```math
+\Phi(V, \tau_{\mathrm{hold}}) = V\left[1 - e^{-\lambda \max(0,\ \tau_{\mathrm{hold}} - \tau_{\mathrm{grace}})}\right], \quad \lambda = 0.00045\ \mathrm{day}^{-1},\ \tau_{\mathrm{grace}} = 90\ \mathrm{d}.
+```
+
+**Rejected.** It is demurrage while physical under another name, which conflicts with R2 and with the owner's clarification that holding cash is free and only the *behaviour after re-entry* is charged. It also applies per note, with no threshold, so it hits small everyday users. §6 is kept.
+
+**Numeric check.** The report gives $`r_d = 0.0005`$/day as "≈16.78%/yr". The correct figure is $`1 - (1 - 0.0005)^{365} \approx 16.69\%`$ (continuous: $`1 - e^{-0.1825} \approx 16.68\%`$). Its digital decay equations otherwise match the code's surplus-above-$`T`$ rule.
 
 ---
 
@@ -238,6 +276,12 @@ Splitting a re-entry across many addresses would dodge $`\Theta`$. Mitigations:
 2. **Below the floor, no proof is needed.** Small everyday deposits stay frictionless. A Sybil would need $`\Theta / \theta_{\min} = 500`$ unrelated persons to bypass the rule, which is a personhood-layer cost (§10).
 3. **Note-side signal.** Bulk re-entry of many notes minted by the same minter in the same era is flagged as one cluster (heuristic, optional).
 
+### 6.6 Research integration (Q1–Q3)
+
+- **Q1.** The report proposes multiplicative decay, $`B_s(t+1) = B_s(t)(1 - \delta_b)(1 - \delta_a \mathbb{1}[t_{\mathrm{idle}} \gt 180\,\mathrm{d}])`$, with $`\delta_a = 0.001`$. Its rationale is wrong: additive *exponential* decay $`e^{-(\lambda + \lambda_a)\Delta t}`$ can never go negative, and $`(1-\delta_b)(1-\delta_a) = 1 - \delta_b - \delta_a + \delta_b\delta_a`$ is additive to first order. This spec keeps §6.4 (exponential, so it can't go negative), adopts the report's point that acceleration applies **only to surplus**, and resolves Q1 as "separate decay for the bucket and the rest" (§6.4 split $`b = B + r`$).
+- **Q2.** Adopted: an outflow counts towards $`v`$ only after a minimum hold $`\Delta t_{\min} = 12`$ h, and only if sent to a counterparty other than the sender's last $`k`$ counterparties. The report's "distinct nullifier path" wording assumes a UTXO model. TCL uses accounts, so the circuit instead proves the recipient is outside a committed set of the sender's last $`k`$ counterparties, which is private to the sender.
+- **Q3.** Adopted: $`\theta_{\min} = 10\,000`$ TCL (in units of $`S`$).
+
 ---
 
 ## 7. Decentralized minting
@@ -291,6 +335,40 @@ Let $`K_{\mathrm{clone}}`$ be the cost of extracting $`sk_{\mathsf{id}}`$ and re
 
 Design target: $`K_{\mathrm{clone}} \gt n_{\max} V_{\max}`$ for a realistic offline circulation depth $`n_{\max}`$ before resync (for example 20). So $`V_{\max} \lt K_{\mathrm{clone}} / n_{\max}`$; values are pending hardware research.
 
+### 7.6 Research integration (Part C Model 1, Part D, Q6)
+
+The report's mint model:
+
+```math
+C(t) = \min\!\Big(C_{\mathrm{cap}},\ C_{\mathrm{base}}\tfrac{I_{\mathrm{CPI}}(t)}{I_{\mathrm{CPI}}(0)}\Big), \qquad R = V \mu_{\max}\Big(1 - \tfrac{S_{\mathrm{phys}}}{S_{\mathrm{target}}}\Big),
+```
+
+with $`C_{\mathrm{base}} = 1.50`$, $`C_{\mathrm{cap}} = 5.00`$, $`\mu_{\max} = 0.01`$ and $`S_{\mathrm{target}} = 20\%`$ of supply.
+
+**Assessment:**
+
+- **Error:** $`R`$ goes negative when $`S_{\mathrm{phys}} \gt S_{\mathrm{target}}`$. Use $`\max(0, \cdot)`$.
+- **Conflict:** the CPI oracle is a centralized price feed, which conflicts with sovereignty and decentralization. It is rejected in favour of §7.2's market-discovered median.
+- **Adopted:** the supply-target shape replaces the §7.3 controller:
+
+```math
+R_d = \min\!\Big(V_d\,\rho_{\max}\max\!\big(0,\ 1 - \tfrac{P}{p^{*}M}\big),\ \tfrac{\alpha\mathcal{E}_e}{\max(1,n_e)}\Big), \quad \rho_{\max} = 0.01,\ p^{*} = 0.2 \ (\text{proposed}).
+```
+
+- **Cost cap:** set $`c^{\max}_d = \min(\gamma_c V_d,\ 5\ \text{TCL})`$.
+
+**Part D (hardware).** The proposed note is a BOPP polymer substrate with OVD, UV and IR inks, an optical PUF layer, an embedded NFC SE, and delamination-sensitive silver antenna tracks. The report gives circulation life as 8–10 years † and lists per-unit cost:
+
+| Volume | 10k | 1M | 100M |
+| --- | --- | --- | --- |
+| Total $`C`$ | \$5.00 | \$0.75 | \$0.23 |
+
+The component sums check out. **Inconsistency:** the table's SE line (\$0.11–1.25) is NTAG-class, while the report's own matrix prices the asymmetric SE050 class at \$1.10–1.80. Since §4.6 requires an asymmetric SE, realistic $`C`$ at 1M units is about \$1.6–2.3 (estimate †).
+
+**Q6 (denominations).** The report proposes 5, 10, 20, 50, 100 and 500, with $`V_{\max} = 500`$ TCL, citing a clone cost of \$50k–150k "per design iteration".
+
+**Error:** a per-*design* setup cost is amortized over every clone made, so the right test from §7.5 is on the *marginal* clone cost, $`\Pi = nN_cV - K_{\mathrm{setup}} - N_c K_{\mathrm{marginal}}`$. This spec adopts the denomination set provisionally, pending a marginal-cost estimate, with $`V_{\max} = 500`$ as an upper bound. It also mixes TCL and \$ units without an exchange rate.
+
 ---
 
 ## 8. Cryptographic mining
@@ -311,6 +389,12 @@ r_j = \beta\,\mathcal{E}_e \cdot \frac{w_j}{\sum_{i \in e} w_i}.
 ```
 
 Settlers get $`\gamma\,\mathcal{E}_e`$, split per accepted settlement. Optional PoW gets $`\delta\,\mathcal{E}_e`$ split by valid shares. Anti-cartel measures: each epoch's proving slot goes to a uniformly random bonded prover (randomness from the previous root, $`H(14, \mathcal{R}_{e-1}, e)`$), with permissionless fallback after a timeout $`t_{\mathrm{fb}}`$; a per-prover reward share cap $`s_{\max}`$ (for example 20%), with the excess returned to the pool; and slashing of bond $`\beta_{\mathrm{bond}}`$ for missed assigned slots.
+
+### 8.1 Research integration (Part C, Q7, Q8)
+
+- **Q7.** Adopted: drop optional PoW and set $`\delta = 0`$ permanently (energy without useful work).
+- **Cartels.** Adopted: a reverse-Dutch auction for batch rewards, $`r(t) = r_0(1 + \kappa_r \lfloor (t - t_0)/N_{\mathrm{blocks}} \rfloor)`$ capped at $`r_{\max}`$. It complements the §8 random assignment.
+- **Q8.** Adopted as a roadmap item: off-chain recursive aggregation (Nova folding or Plonky2) wrapped in one outer Groth16 proof. The report's figure of about 220k gas is plausible for BN254 Groth16 with few public inputs (about 181k base plus about 6k per input; verify on Anvil). The existing settlement circuit stays as-is until then.
 
 ---
 
@@ -351,6 +435,21 @@ P = \sum_{\mathsf{id}\,:\,\sigma = \textsf{LIVE}} V_{d(\mathsf{id})}.
 ```
 
 Lost notes stay in $`P`$ forever. They are effectively burned, like lost cash, and are not reclaimed (R1).
+
+### 9.4 Research integration (Part C Model 2, Q9, Q11)
+
+The report's emission rule is $`E_{\mathrm{em}} = E_{\mathrm{pool}}(1 - e^{-\gamma})`$ with $`\gamma = 0.05`$, or about 4.88% per epoch, consistent with §9.2's $`\eta = 0.05`$. It splits emission 20% to minters and 80% to provers, adjusted dynamically:
+
+```math
+\alpha(L) = \max\!\big(0.05,\ 0.20 - \eta_L \max(0,\ L - L_{\mathrm{target}})\big), \quad L_{\mathrm{target}} = 60\ \mathrm{s},\ \eta_L = 0.005\ \mathrm{s}^{-1}.
+```
+
+**Assessment:**
+
+- **Inconsistency:** Part C states this controller as $`\alpha = 0.20 - \theta (T_{\mathrm{avg}} - T_{\mathrm{target}})/T_{\mathrm{target}}`$, which has no floor and can go negative or above 1. The Q9 form with a floor is adopted.
+- **Error:** the report funds the vault with "50% of EVM transaction base fees", but L1 base fees are burned or paid to validators, not to the protocol, and TCL charges no protocol fee. This spec funds the vault from demurrage and re-entry penalties only, unless a protocol fee is added later (owner decision).
+- **Adopted:** the minter/prover split is $`\alpha`$ for minters and $`1 - \alpha`$ shared by provers and settlers ($`\beta:\gamma = 0.7:0.3`$ within it), with $`\delta = 0`$.
+- **Q11, UBI.** The report recommends keeping about 17%/yr ($`r_d = 0.0005`$/day) above 5M and distributing 80% of net demurrage, after minter and prover rewards, equally per verified person. That **needs no issuance**, so it is compatible with fixed supply, unlike the earlier PPP formula, which stays rejected. It is proposed as $`1 - \phi = 0.8`$ of the vault inflow, distributed per personhood credential per epoch. Caveat: per-person UBI makes personhood the most valuable attack target, so §10.5 must be in place first.
 
 ---
 
@@ -499,34 +598,53 @@ So the PPP rule **conflicts with the current fixed-supply design** and is not ad
 | Dumping | Flood re-entered funds | Release window $`W_r`$ | None within bounds |
 | Admin capture | Owner upgrades or changes params | §10.4 roadmap | Until Stage 3 |
 | Front-running a redemption | Steal the proof in the mempool | Recipient $`a`$ bound in the SE signature and proof | None known |
+| Symmetric-key forgery | Extract the NTAG AES key from a verifier app | Asymmetric SE only for offline checks (§4.6) | None if enforced |
+| Nonce-based multi-deposit | Free nonce in $`N_{\mathrm{dep}}`$ | Deterministic era nullifier (§4.6) | None |
+| Kiosk custody | A kiosk sees the user's identity secret | Card-side proving; kiosk only relays (Q10) | Kiosk metadata |
 
 ---
 
-## 12. Open questions
+## 12. Decisions (proposed, pending owner confirmation)
 
-1. Exact anti-hoarding combination with normal surplus decay (§6.4): additive, or replace the normal rate for the bucket?
-2. Should velocity count only transfers to *distinct* counterparties (resists wash transfers to one's own addresses), and how is that measured without identity?
-3. Is $`\theta_{\min}`$ (the personhood-proof floor) acceptable friction, and what value?
-4. How do genesis notes ($`g = 1`$) enter: what is the initial-distribution mechanism, and are they exempt from §6?
-5. Offline revocation latency: how stale may a receiver's LIVE snapshot be?
-6. The denomination set $`\mathcal{D}`$ and $`V_{\max}`$, pending hardware clone-cost data.
-7. Should optional PoW exist at all, given it adds energy cost without useful work?
-8. Can re-entry proofs be batched in the existing settlement circuit, or do they need a separate circuit and verifier?
-9. Default emission split and $`\phi`$: what are the sustainable values under realistic fee volume?
-10. Ceremony cadence and graph threshold $`\theta_g`$ for the non-biometric PoP fusion, and access for people without phones.
-11. Adopt UBI recycling (§10.7)? Should demurrage move toward the research's ~1%/yr then 5–10%/yr path (currently $`r_d = 0.0005`$/day, about 17%/yr on surplus)?
-12. Plural conviction parameters $`\tau_{1/2}, \beta_1, \beta_2`$; independent analysis of the $`\mathcal{O}(k^2)`$ Sybil-cost claim; primary sources for † claims.
+Source for every "Gemini rec" entry: Gemini deep research (user-supplied, 2026-10-23, master), Part E. Assessment key: **A** = agree, **M** = modify, **R** = reject.
 
----
+| # | Question | Gemini recommendation | Assessment | Proposed decision | Owner input? |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Fast decay vs normal decay | Multiplicative surplus decay, idle above 180 d, $`\delta_a = 0.001`$ | **M**: the "negative balance" rationale is wrong (§6.6); idle-only ignores velocity | Keep §6.4 velocity-weighted exponential decay on a separate bucket, surplus only | No |
+| 2 | Velocity and wash transfers | 12 h hold delay plus distinct-path ZK check | **M**: UTXO wording does not fit accounts | 12 h $`\Delta t_{\min}`$ plus a private "not in last $`k`$ counterparties" proof | No |
+| 3 | Personhood floor | 10,000 TCL | **A** | $`\theta_{\min} = 10^4 S`$ | No |
+| 4 | Genesis distribution | 70% PoP airdrop and 30% auction; no penalty exemption | **M**: the exemption is moot because §6 has no holding penalty; the auction needs a counter-asset and price-setter | 70/30 split as proposal; no exemption flag needed ($`g`$ kept for audit only) | **Yes** (split, auction) |
+| 5 | Offline staleness | $`T_{\max} = 30`$ d or 1,000 taps | **A**: bounds clone chains | Wallet warns past $`T_{\max}`$; SE refuses past 1,000 taps without sync | No |
+| 6 | Denominations | 5–500, $`V_{\max} = 500`$ | **M**: clone-cost argument uses a per-design cost, not the marginal cost (§7.6); mixes TCL and \$ | Adopt the set provisionally; confirm $`V_{\max}`$ after a marginal-cost estimate | Yes (confirm) |
+| 7 | Proof-of-work | Drop it | **A** | $`\delta = 0`$ permanently | No |
+| 8 | Proof batching | Nova or Plonky2 aggregation in a Groth16 wrapper, about 220k gas | **A**: plausible gas, verify on Anvil | Roadmap; current circuit unchanged | No |
+| 9 | Emission and split | 100% demurrage plus 50% tx fees; 20/80 with queue-latency controller | **M**: TCL has no protocol tx fee; Part C controller is unbounded | Fund vault from demurrage and penalties; bounded $`\alpha(L)`$ from §9.4 | **Yes** (add a protocol fee?) |
+| 10 | Personhood cadence and access | Re-attest every 6 months; $`k \ge 3`$ peer vouches; municipal kiosks | **M**: 3 colluders can vouch endless Sybils; a kiosk "processing the ZK proof on their behalf" sees the secret; "municipal" implies state custody | 6-month re-attestation; $`k \ge 3`$ **and** ceremony; community-run kiosks that relay only (proof generated on the user's card) | Yes |
+| 11 | UBI and demurrage path | Keep about 17%/yr above 5M; 80% of net demurrage as equal UBI | **A** with caveat: no issuance, fits fixed supply; "16.78%" is actually 16.69%; UBI raises Sybil stakes | Optional, governance-enabled UBI with $`1 - \phi = 0.8`$; constants unchanged | **Yes** (adopt UBI?) |
+| 12 | Conviction, Sybil, biometrics | $`\alpha = 0.9057`$/day ($`t_{1/2} = 7`$ d, checked: 6.998 d); token-weighted $`D(t)`$; $`\mathcal{O}(k^2)`$ only with MACI plus pairwise; "hardware required due to biometric bans" | **M/R**: unnormalized update again (§10.6); token weight conflicts with one person, one vote; threshold form differs from the earlier report (not squared); $`\mathcal{O}(k^2)`$ still asserted, not derived; biometrics conflict with anonymity, and the ban rationale is regulatory content (R7) | Normalized update, person credits only, squared threshold; biometrics optional (§10.5); half-life 7 d proposed | Yes (half-life) |
 
-## 13. Pending research (awaiting Gemini results)
+**Conviction check.** $`t_{1/2} = \ln 0.5 / \ln 0.9057 \approx 6.998`$ days, which is correct. With the normalized update, one day of support reaches $`1 - \alpha \approx 9.4\%`$ of steady state.
+
+**Sybil check.** Splitting $`V`$ credits across $`k`$ identities under quadratic voting gives $`k\sqrt{V/k} = \sqrt{kV}`$, which is correct and shows splitting pays. The report's "resistance $`\mathcal{O}(1/k)`$" is loose wording. The claim $`\mathrm{Cost}_{\mathrm{Sybil}}(k) = \gamma k^2 + \delta k`$ is still asserted without derivation.
+
+## 13. Open questions (still unresolved)
+
+1. Genesis: confirm the 70/30 split, and what the auction sells against (Q4).
+2. Add a protocol transaction fee to fund the vault (Q9)?
+3. Adopt per-person UBI (Q11)? It depends on personhood robustness.
+4. Marginal per-note clone cost and the final $`V_{\max}`$ (Q6).
+5. Conviction half-life: 7 days (report) or longer (Q12)?
+6. Peer-vouch threshold $`k`$, and the kiosk trust model (Q10).
+7. Formal derivation of Sybil cost under pairwise discounting (Q12).
+
+## 14. Research received
 
 | Topic | Feeds sections | Status |
 | --- | --- | --- |
-| Reusable physical bearer notes (PUF, SE, offline e-cash, offline CBDC) | §4, §7.5, §11 | Awaiting results |
-| Demurrage history on physical currency (Wörgl, Freigeld, Chiemgauer) | §5, §6 | Awaiting results |
-| Mint and mine incentive models (proof markets, bonding, slashing) | §7, §8, §9 | Awaiting results |
-| Hardware and manufacturing unit economics (NTAG 424 DNA, SE050, polymer, PUF) | §4.1, §7.2, §7.5 | Awaiting results |
-| Anonymous proof-of-personhood and anti-capture governance | §6.5, §10.5–§10.8 | **Received**: Gemini deep research (user-supplied, 2026-10-23); incorporated, critically reviewed |
+| Reusable physical bearer notes | §4.6, §11 | **Received** (master, Part A) |
+| Demurrage history | §5.1 | **Received** (master, Part B) |
+| Mint and mine incentives | §7.6, §8.1, §9.4 | **Received** (master, Part C) |
+| Hardware and manufacturing | §4.6, §7.6 | **Received** (master, Part D) |
+| Personhood and governance | §10.5–§10.8, §12 | **Received**: Gemini deep research (user-supplied, 2026-10-23) and master Part E |
 
-Regulatory research is intentionally out of scope (R7).
+**Source quality.** Several works cited in the master report are secondary or low quality and are not relied on here, including accio.com, chainscorelabs.com, coinlive.com, mikkoikola.com, okx.com, binance.com and forklog.com. Claims resting on them are marked †. Better primary candidates appear in the report's own list, such as NXP AN12196, the Baldimtsi et al. transferable e-cash paper, the Plonky2 blog and the CNPD deliberation. The regulatory-ban details in Q12 are not reproduced (R7).
