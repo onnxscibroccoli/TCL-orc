@@ -636,6 +636,57 @@ r_v \cdot \mathbb{E}[\text{good-standing windows}] \gt (1 - p_{\mathrm{honest\ o
 
 meaning an honest voucher's expected reward exceeds their expected loss from being deceived. Higher tiers raise the attack cost to $`v_n B_v`$ per identity, while the extractable value $`L_n`$ grows more slowly. This requires $`L_n / v_n`$ to be non-increasing in $`n`$.
 
+### 10.10 Incentivized reporting (fraud bounties) (owner-requested)
+
+**Reportable offences.** A report must carry evidence that can be verified on chain, so the contract or a circuit can check it without trusting anyone:
+
+| Offence | Evidence |
+| --- | --- |
+| Bribe offer | Bribe message signed by the briber's key, binding a proposal and a vote |
+| Double deposit | Two valid deposit authorizations for the same $`(\mathsf{id}, k)`$, or conflicting nullifiers |
+| Fake-identity vouch | A vouch for an identity later proven Sybil (§10.9) |
+| Invalid proof | A proof submission that fails verification, or a proof of a false statement |
+
+**Bonds.** The offender has a bond at stake, $`b_o`$ (a vouch bond $`B_v`$, prover bond or minter bond). The reporter posts a bond $`b_r`$, which is forfeited to the vault if the report proves false. A verified report pays
+
+```math
+R = \min\!\big(\sigma\, b_o + \tau,\ b_o\big), \qquad \sigma \in (0, 1),\ \tau \le \tau_{\max} \ (\text{capped pool top-up}),
+```
+
+from the offender's slashed bond. Any remainder $`b_o - R`$ goes to the vault.
+
+**Reporter's choice.** Let $`p`$ be the probability that a report is verified and paid, and $`\mathcal{B}`$ a bribe offered for silence. The reporter defects from the scheme, and reports, exactly when
+
+```math
+p\,R - (1-p)\,b_r^{\mathrm{false}} \gt \mathcal{B},
+```
+
+where $`b_r^{\mathrm{false}} = 0`$ for a truthful report backed by valid evidence, since $`p \to 1`$. For truthful reports this reduces to $`p R \gt \mathcal{B}`$. False reports have expected value $`-b_r \lt 0`$.
+
+**Self-reporting is closed.** An offender who reports themselves, or through a sock-puppet, loses $`b_o`$ and receives $`R \le b_o`$, and the exploit is reversed on proof. The net is
+
+```math
+\Pi_{\mathrm{self}} = R - b_o \le 0 .
+```
+
+**Equilibrium.** An exploit with gain $`G`$ has $`m`$ accomplices, or holders of the evidence, each of whom reports independently with probability $`p_a`$. The chance of detection is $`\pi = 1 - (1 - p\,p_a)^m`$, and the offender's expected payoff is
+
+```math
+\mathbb{E}[\Pi_o] = (1 - \pi)\,G - \pi\,b_o \lt 0 \iff b_o \gt \frac{(1-\pi)}{\pi}\,G .
+```
+
+The first accomplice to report keeps their own bond (leniency), giving up their share $`g_a`$ of the exploit:
+
+```math
+U_{\mathrm{report}} = p\,R + b_a \quad\text{vs}\quad U_{\mathrm{silent}} = (1-\pi_{-a})\,g_a - \pi_{-a}\,b_a .
+```
+
+With $`R \ge g_a`$, and $`b_a`$ at stake, reporting dominates staying silent. The briber can only outbid this by paying $`\mathcal{B} \gt p R`$ to *every* accomplice, which raises the cost of the exploit above $`m p R`$. Collusion between the offender and the reporter cannot profit either: their joint net is $`R - b_o \le 0`$.
+
+**Link to tiered personhood (§10.9).** A vouch bond $`B_v`$ is an offender bond $`b_o`$. Reporting a vouch for a proven-fake identity raises the slashing probability $`p_s`$ in §10.9's unprofitability bound, which lowers the bond needed, $`B_v \gt (qL_1w_d - c_{\mathrm{id}})/(p_s v_1)`$.
+
+**Limitation.** Bribes made entirely off chain, leaving no signed evidence, cannot be caught by bounties. They are handled by MACI receipt-freeness (§10.2): a voter can always rotate keys and re-vote, so a briber can never verify compliance.
+
 ---
 
 ## 11. Threat model
