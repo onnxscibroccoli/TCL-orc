@@ -73,7 +73,7 @@ jobs:
       - run: circom --version && snarkjs --version | head -1 || true
       - run: pip install -r requirements-test.txt && pip install -e .
       - name: compile circuit (depth 4)
-        run: circom circuits/main/state_transition_d4.circom --r1cs --wasm -l node_modules -o /tmp/circuit
+        run: mkdir -p /tmp/circuit && circom circuits/main/state_transition_d4.circom --r1cs --wasm -l node_modules -o /tmp/circuit
       - name: Groth16 prover tests (fail-closed)
         env:
           TCL_REQUIRE_ZK: "1"
