@@ -57,7 +57,7 @@ ARTIFACTS = [
     "ledger/test_demurrage_fixed.py",
     "ledger/test_nullifiers.py",
     "contracts/CirculatoryEngine.sol",
-    "contracts/PhysicalMintController.sol",
+    "contracts/physical/NoteController.sol",
     "Containerfile",
     "circuits/puf_verify.circom",
     "circuits/lib/merkle.circom",

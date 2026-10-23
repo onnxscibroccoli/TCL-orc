@@ -244,6 +244,7 @@ contract NoteController is
         uint256 v = faceValue(denom);
         cost = attestedCost < costCap[denom] ? attestedCost : costCap[denom];
         reward = (v * rewardBps) / 10_000;
+        // slither-disable-next-line incorrect-equality (justified in docs/SECURITY.md)
         uint256 spent = (block.timestamp / epochLength == currentEpoch) ? spentInEpoch : 0;
         uint256 total = cost + reward;
         if (total > pool || spent + total > epochBudget) return (0, 0); // pure 1:1 conversion
@@ -334,6 +335,7 @@ contract NoteController is
 
     function _release(address acct) internal returns (uint256 amt) {
         amt = unlocked(acct);
+        // slither-disable-next-line incorrect-equality (justified in docs/SECURITY.md)
         if (amt == 0) return 0;
         Bucket storage bk = buckets[acct];
         bk.released += uint128(amt);

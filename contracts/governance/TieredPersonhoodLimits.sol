@@ -6,7 +6,7 @@ pragma solidity 0.8.24;
 ///         eff >= v_n and allows at most L_n per window per pseudonym. Requires L_n / v_n non-increasing.
 /// @dev Fail-closed: an unknown pseudonym is tier 0 with limit 0. `attestor` is the personhood
 ///      layer (ceremony + graph oracle / ZK verifier) that reports effective vouches; `consumer` is the
-///      settlement path (CirculatoryEngine / PhysicalMintController integration is future work).
+///      settlement path (CirculatoryEngine / NoteController integration is future work).
 ///      Funneling aggregation (§10.9) is off-chain/circuit-side and reported via `chargeFunneled`.
 contract TieredPersonhoodLimits {
     uint256 public constant WAD = 1e18;
