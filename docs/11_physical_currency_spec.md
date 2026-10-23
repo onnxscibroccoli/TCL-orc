@@ -1,7 +1,7 @@
 # 11 — Physical Currency, Minting, Mining and Governance Specification
 
 > [!WARNING]
-> **DRAFT — NOT IMPLEMENTED.** This document is a design specification under discussion. Nothing described here exists in `main`. Formulas, parameters and default values are proposals and will change after owner review of the research-driven decisions (see [§12](#12-decisions-proposed-pending-owner-confirmation)). Where this draft conflicts with code, the code is authoritative for what currently runs.
+> **DRAFT — NOT IMPLEMENTED.** This document is a design specification under discussion. Nothing described here exists in `main`. Formulas, parameters and default values are proposals and will change after owner review of the research-driven decisions (see [§12](#12-decisions-owner-confirmed-2026-10-23)). Where this draft conflicts with code, the code is authoritative for what currently runs.
 
 ## Contents
 
@@ -16,7 +16,7 @@
 9. [Shared incentive pool, emission and conservation](#9-shared-incentive-pool-emission-and-conservation)
 10. [Governance and anti-capture](#10-governance-and-anti-capture)
 11. [Threat model](#11-threat-model)
-12. [Decisions (proposed, pending owner confirmation)](#12-decisions-proposed-pending-owner-confirmation)
+12. [Decisions (owner-confirmed, 2026-10-23)](#12-decisions-owner-confirmed-2026-10-23)
 13. [Open questions (still unresolved)](#13-open-questions-still-unresolved)
 14. [Research received](#14-research-received)
 
@@ -604,7 +604,49 @@ So the PPP rule **conflicts with the current fixed-supply design** and is not ad
 
 ---
 
-## 12. Decisions (proposed, pending owner confirmation)
+## 12. Decisions (owner-confirmed, 2026-10-23)
+
+These decisions were locked by the owner and supersede the corresponding rows in §12.1.
+
+**1. Genesis distribution.** 70% of the fixed supply is airdropped equally to verified persons. The other 30% is sold by auction, and the proceeds fund physical-note manufacturers and initial bootstrapping. With $`N_0`$ verified persons at genesis and fixed supply $`M`$:
+
+```math
+a_{\mathrm{person}} = \frac{0.7\,M}{N_0}, \qquad M_{\mathrm{auction}} = 0.3\,M .
+```
+
+No genesis exemption flag is needed, because §6 has no holding penalty.
+
+**2. No protocol transaction fees.** The incentive pool is funded only by demurrage and re-entry penalties:
+
+```math
+\Delta I_e = \phi\,(F_e + \Pi_e).
+```
+
+**3. Optional per-person UBI, behind a governance gate.** UBI is paid from the demurrage pool only after governance judges personhood proofs secure:
+
+```math
+u_e = \mathbb{1}[G_{\mathrm{UBI}}]\cdot\frac{(1-\phi)(F_e + \Pi_e)}{N_e}.
+```
+
+$`G_{\mathrm{UBI}}`$ is a proposal that must pass §10.6 plural conviction voting with the constitutional supermajority (more than 66%) and the 30-day timelock. It must also be backed by a published Sybil-resistance assessment of §10.5. It can be reversed by the same process.
+
+**4. Maximum denomination of 500 face value.** The series is 5, 10, 20, 50, 100 and 500. *Verification task (not a blocker):* confirm that the per-copy clone cost of an asymmetric-SE note exceeds the value one clone can earn, $`K_{\mathrm{marginal}} \gt n_{\max} \cdot 500`$ (§7.5–§7.6).
+
+**5. Governance.** Conviction voting uses a 7-day half-life, $`\alpha = 0.9057`$ per day ($`t_{1/2} = \ln 0.5/\ln\alpha \approx 6.998`$ d), with the normalized update so that conviction builds gradually:
+
+```math
+Y_{i,p}(t) = \alpha\,Y_{i,p}(t-1) + (1-\alpha)\,W_i\,S_{i,p}(t).
+```
+
+Voting is one anonymous person, one vote via ZK personhood. Biometrics are optional.
+
+**6. Personhood.** A new person needs 3 vouches from existing trusted users. City kiosks act only as relays for cards the user builds; they never see the user's secret. **Known residual risk (recorded; the owner's choice stands):** 3 colluding vouchers can bootstrap Sybil identities. Mitigations:
+
+- re-attestation every 6 months;
+- voucher accountability, where a voucher's credential and vouching rights are slashed when a vouchee is proven Sybil;
+- plural discount $`W_i`$ (§10.6) on densely connected clusters.
+
+### 12.1 Research assessment (Gemini recommendations, for the record)
 
 Source for every "Gemini rec" entry: Gemini deep research (user-supplied, 2026-10-23, master), Part E. Assessment key: **A** = agree, **M** = modify, **R** = reject.
 
@@ -629,13 +671,8 @@ Source for every "Gemini rec" entry: Gemini deep research (user-supplied, 2026-1
 
 ## 13. Open questions (still unresolved)
 
-1. Genesis: confirm the 70/30 split, and what the auction sells against (Q4).
-2. Add a protocol transaction fee to fund the vault (Q9)?
-3. Adopt per-person UBI (Q11)? It depends on personhood robustness.
-4. Marginal per-note clone cost and the final $`V_{\max}`$ (Q6).
-5. Conviction half-life: 7 days (report) or longer (Q12)?
-6. Peer-vouch threshold $`k`$, and the kiosk trust model (Q10).
-7. Formal derivation of Sybil cost under pairwise discounting (Q12).
+1. Formal derivation of Sybil-attack cost under pairwise/plural discounting and 3-voucher bootstrapping (Q12).
+2. Verification of the per-copy clone cost of an asymmetric-SE note against the 500 face-value cap (Q6).
 
 ## 14. Research received
 
