@@ -376,3 +376,64 @@ contract CirculatoryEngineInvariantTest is Base {
         assertEq(lazy + pending, stored);
     }
 }
+
+/// Chained real proofs (scripts/gen_zk_fixture.py CHAIN): consecutive settles on one
+/// ledger; each proof's newRoot is the full post-settle root (account + vault leaf).
+contract CirculatoryEngineChainTest is Base {
+    using stdJson for string;
+
+    string internal fx;
+    uint256 internal n;
+
+    function _step(uint256 i)
+        internal
+        view
+        returns (uint256[2] memory pA, uint256[2][2] memory pB, uint256[2] memory pC, uint256[4] memory pub)
+    {
+        string memory k = string.concat(".steps[", vm.toString(i), "].calldata");
+        uint256[] memory a = fx.readUintArray(string.concat(k, ".a"));
+        uint256[] memory b0 = fx.readUintArray(string.concat(k, ".b[0]"));
+        uint256[] memory b1 = fx.readUintArray(string.concat(k, ".b[1]"));
+        uint256[] memory c = fx.readUintArray(string.concat(k, ".c"));
+        uint256[] memory s = fx.readUintArray(string.concat(k, ".pubSignals"));
+        pA = [a[0], a[1]];
+        pB = [[b0[0], b0[1]], [b1[0], b1[1]]];
+        pC = [c[0], c[1]];
+        pub = [s[0], s[1], s[2], s[3]];
+    }
+
+    function setUp() public {
+        fx = vm.readFile("test/contracts/fixtures/state_transition_chain.json");
+        n = fx.readUint(".count");
+        (,,, uint256[4] memory first) = _step(0);
+        (,,, uint256[4] memory last) = _step(n - 1);
+        vm.warp(last[3] + 1);
+        engine = _deploy(IStateVerifier(address(new StateVerifier())), first[2], uint64(fx.readUint(".t0")));
+    }
+
+    function test_ConsecutiveSettlementsTrackLedgerRoot() public {
+        assertGe(n, 3);
+        uint256 total;
+        vm.startPrank(owner);
+        for (uint256 i = 0; i < n; ++i) {
+            (uint256[2] memory pA, uint256[2][2] memory pB, uint256[2] memory pC, uint256[4] memory pub) = _step(i);
+            assertEq(engine.stateRoot(), pub[2]);
+            engine.settleEpoch(pA, pB, pC, pub);
+            uint256 ledgerRoot = fx.readUint(string.concat(".steps[", vm.toString(i), "].ledgerRoot"));
+            assertEq(engine.stateRoot(), ledgerRoot);
+            assertEq(engine.epoch(), i + 1);
+            total += pub[1];
+            assertEq(engine.offchainFeesSettled(), total);
+            assertEq(total, fx.readUint(string.concat(".steps[", vm.toString(i), "].vault")));
+        }
+        vm.stopPrank();
+    }
+
+    function test_OutOfOrderStepRejected() public {
+        (uint256[2] memory pA, uint256[2][2] memory pB, uint256[2] memory pC, uint256[4] memory pub) = _step(1);
+        uint256 root = engine.stateRoot();
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CirculatoryEngine.StaleRoot.selector, root, pub[2]));
+        engine.settleEpoch(pA, pB, pC, pub);
+    }
+}

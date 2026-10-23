@@ -180,6 +180,13 @@ def deploy(rpc: str, genesis_root: int, genesis_time: int, work: Path,
     return dep
 
 
+def state_root(dep: Deployment) -> int:
+    """Current on-chain ``stateRoot`` of the engine proxy."""
+    out = _run([discover()["cast"], "call", dep.engine, "stateRoot()(uint256)",
+                "--rpc-url", dep.rpc_url], "stateRoot")
+    return int(out.split()[0])
+
+
 def _arr(xs) -> str:
     return "[" + ",".join(_arr(x) if isinstance(x, list) else str(x) for x in xs) + "]"
 

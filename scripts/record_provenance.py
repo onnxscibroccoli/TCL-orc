@@ -68,6 +68,8 @@ ARTIFACTS = [
     "test/contracts/CirculatoryEngine.t.sol",
     "test/contracts/fixtures/state_transition.json",
     "test/contracts/fixtures/verification_key.json",
+    "test/contracts/fixtures/state_transition_chain.json",
+    "test/integration/test_multi_epoch.py",
     "tests/test_zk_prover.py",
     "tests/test_circuit_hygiene.py",
     "scripts/gen_zk_fixture.py",

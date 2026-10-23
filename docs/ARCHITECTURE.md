@@ -91,7 +91,11 @@ The statement one proof makes:
 
 1. `Poseidon(accountId, oldBalance, oldTime)` sits at a hidden index under the public `oldRoot`.
 2. `dt = newTime - oldTime` is in `0..604800` (one Taylor step), and `fee` and `newBalance` follow the fixed-point rule exactly.
-3. `Poseidon(accountId, newBalance, newTime)` at the same index and with the same siblings gives the public `newRoot`.
+3. `Poseidon(accountId, newBalance, newTime)` at the same index and with the same siblings gives the intermediate `midRoot`.
+4. In `midRoot`, the vault leaf at the reserved index 0 is `Poseidon(VAULT_ID, vaultBalance, vaultTime)` (or empty before the first fee), and replacing it with `Poseidon(VAULT_ID, vaultBalance + fee, newTime)` (unchanged if `fee = 0`) gives the public `newRoot`.
+   The account must not be the vault (`accountId != VAULT_ID`, index != 0).
+
+So one proof covers the whole `Ledger.settle`, and `newRoot == Ledger.root()` after it.
 
 The public signals, in snarkjs order, are `[newRoot, fee, oldRoot, newTime]`.
 The account, its balances and its path stay private.
@@ -104,11 +108,9 @@ circomspect 0.9.0 reports nothing beyond CS0005 on those two lines.
 
 Prover: `src/tcl/zk/prover.py` runs compile (r1cs + wasm), witness (`snarkjs wtns calculate`), `groth16_setup` (dev ptau plus one local zkey contribution), `prove`, `verify`, `export_verifier` and `solidity_calldata`.
 `build_transition_input(ledger, account, now)` settles a real `Ledger` account and returns the circuit input.
-It checks fail-closed that the computed `newRoot` is in the ledger's journaled root history.
-
-The newRoot is the root right after the account-leaf update.
-`Ledger.settle` then updates the vault leaf in a second journaled step.
-Proving the vault leaf is not done yet: on-chain, `fee` is accumulated as `offchainFeesSettled`.
+It checks fail-closed that the intermediate root matches the vault path and that `newRoot` equals the ledger root after settle.
+On-chain, `fee` is accumulated as `offchainFeesSettled`; consecutive settlements chain on one deployment.
+`ensure_artifacts` keys its cache on a SHA-256 of all circuit sources, so a circuit change never reuses stale keys.
 
 The ptau and zkey are DEV ONLY and come from single-party local randomness.
 Production needs a public ceremony ptau and a multi-party phase 2.
@@ -128,6 +130,7 @@ Production needs a public ceremony ptau and a multi-party phase 2.
 - Tests are in `test/contracts/CirculatoryEngine.t.sol` (Foundry).
   They cover deposit, decay epochs, the surplus cap, withdraw, redistribute, access control, pause, UUPS upgrade, a reentrancy attacker and the epoch checks.
   A real-proof suite covers verify, StateSettled, replay, tampered fee and tampered proof.
+  A chained suite settles 3 consecutive real proofs (one with fee = 0) on one deployment and checks `stateRoot` equals the ledger root after each, and that an out-of-order proof is rejected.
   Invariant fuzzing checks conservation and the lazy/stored balance identity.
 
 ## Layer 5: Interface and Delivery — Implemented (Phase 4)
@@ -153,8 +156,8 @@ Production needs a public ceremony ptau and a multi-party phase 2.
 4. Contracts are deployed to a throwaway anvil with genesis root = pre-settle ledger root.
 5. `settleEpoch` is sent; the test asserts `StateSettled(epoch=1, oldRoot, newRoot, fee, newTime)` matches the proof's public values, and that the whole window (submit → event) takes under 30 s. The one-time circuit compile + dev setup (~60 s on 1 core-class machines) is cached and timed separately.
 
-Known gap: the proof's `newRoot` is the root after the account-leaf update but before the vault-leaf update (see `docs/SECURITY.md`), so a *second* epoch on the same deployment needs the planned two-leaf circuit.
+Multiple epochs: `test/integration/test_multi_epoch.py` runs 5 consecutive settlements (including a fee = 0 one) on one anvil deployment and asserts the on-chain `stateRoot` equals the ledger root after each.
 
 Planned:
 
-- Signed provenance (Sigstore) and a two-leaf/batched settlement circuit.
+- Signed provenance (Sigstore) and a batched (multi-account) settlement circuit; proving deposits/redistribution.
