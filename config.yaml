@@ -1,0 +1,5 @@
+# Default TCL operational configuration. Overridden by .env and TCL_* env vars.
+db: tcl.db
+log_level: WARNING
+mode: fixed        # linear | fixed
+tree_depth: 20     # Poseidon Merkle tree depth (capacity 2^depth accounts)

@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from ..logs import get_logger
+from ..utils.logger import get_logger
 from .demurrage import apply_demurrage, redistribute
 from .demurrage_fixed import apply_demurrage_fixed
-from .storage import VAULT, LedgerStorage
+from ..storage.db import VAULT, LedgerStorage, StorageError
+from .poseidon_tree import MerkleProof, PoseidonMerkleTree, account_leaf
 
 log = get_logger("ledger")
 Mode = Literal["linear", "fixed"]
@@ -20,11 +21,88 @@ class Ledger:
     calling the pure functions directly.
     """
 
-    def __init__(self, storage: LedgerStorage, mode: Mode = "fixed") -> None:
+    def __init__(self, storage: LedgerStorage, mode: Mode = "fixed", depth: int = 20) -> None:
         if mode not in ("linear", "fixed"):
             raise ValueError("mode must be 'linear' or 'fixed'")
         self.s = storage
         self.mode = mode
+        self.tree = PoseidonMerkleTree(storage, depth)
+
+    # --- state tree ---------------------------------------------------------
+    def _put(self, account: str, balance: int, last_update: int) -> int:
+        """Write account, update its Poseidon leaf, journal pre-image + new root."""
+        with self.s.transaction():
+            prev = self.s.get_account(account)
+            self.s.put_account(account, balance, last_update)
+            idx = self.s.assign_leaf(account)
+            root = self.tree.update(idx, account_leaf(account, balance, last_update))
+            self.s.journal_append(root, account, prev)
+            return root
+
+    def _event(self, kind: str, account: str, amount: int, now: int) -> None:
+        self.s.append_event(kind, account, amount, now, root=self.tree.root())
+
+    def root(self) -> int:
+        return self.tree.root()
+
+    def roots(self) -> list[int]:
+        """Historical roots, oldest first (empty-tree root first)."""
+        return [self.tree.zeros[self.tree.depth]] + [r for _, r, _, _ in self.s.journal()]
+
+    def proof(self, account: str) -> MerkleProof:
+        idx = self.s.leaf_index(account)
+        if idx is None:
+            raise KeyError(f"unknown account {account!r}")
+        return self.tree.proof(idx)
+
+    def verify_state(self) -> bool:
+        """Recompute the root from account rows; True iff it matches stored root."""
+        leaves = {}
+        for acct in self.s.accounts() + [VAULT]:
+            a = self.s.get_account(acct)
+            idx = self.s.leaf_index(acct)
+            if a is None:
+                continue
+            if idx is None:
+                return False
+            leaves[idx] = account_leaf(acct, a[0], a[1])
+        return self.tree.rebuild_root(leaves) == self.tree.root()
+
+    def rollback(self, root: int, now: int) -> int:
+        """Restore state to the most recent point whose root == ``root``.
+
+        Undoes journal entries newer than that point (accounts + tree leaves),
+        truncates the journal and appends an audit ``rollback`` event.
+        Nullifiers are NOT un-spent (fail-closed against double spends).
+        """
+        with self.s.transaction():
+            j = self.s.journal()
+            target = None
+            if root == self.tree.zeros[self.tree.depth]:
+                target = 0
+            for seq, r, _, _ in j:
+                if r == root:
+                    target = seq
+            if target is None:
+                raise StorageError("unknown root: not in verified history")
+            undone = 0
+            for seq, _, acct, prev in reversed(j):
+                if seq <= target:
+                    break
+                idx = self.s.leaf_index(acct)
+                if prev is None:
+                    self.s.delete_account(acct)
+                    self.tree.update(idx, 0)
+                else:
+                    self.s.put_account(acct, prev[0], prev[1])
+                    self.tree.update(idx, account_leaf(acct, prev[0], prev[1]))
+                undone += 1
+            if self.tree.root() != root:
+                raise StorageError("rollback produced unexpected root")
+            self.s.journal_truncate(target)
+            self._event("rollback", "", undone, now)
+        log.info("rollback", extra={"root": str(root), "undone": undone})
+        return undone
 
     def _decay(self, balance: int, dt_seconds: int) -> tuple[int, int]:
         if self.mode == "fixed":
@@ -43,8 +121,8 @@ class Ledger:
             raise ValueError("amount must be positive")
         with self.s.transaction():
             bal = self.settle(account, now)
-            self.s.put_account(account, bal + amount, now)
-            self.s.append_event("deposit", account, amount, now)
+            self._put(account, bal + amount, now)
+            self._event("deposit", account, amount, now)
         log.info("deposit", extra={"account": account, "amount": str(amount)})
         return bal + amount
 
@@ -62,10 +140,10 @@ class Ledger:
                 # only consume whole days so fractional time is not lost
                 dt = (dt // 86_400) * 86_400
             new_bal, fee = self._decay(bal, dt)
-            self.s.put_account(account, new_bal, last + dt)
+            self._put(account, new_bal, last + dt)
             if fee:
-                self.s.put_account(VAULT, self.vault() + fee, now)
-                self.s.append_event("demurrage", account, fee, now)
+                self._put(VAULT, self.vault() + fee, now)
+                self._event("demurrage", account, fee, now)
                 log.info("demurrage", extra={"account": account, "fee": str(fee)})
             return new_bal
 
@@ -80,12 +158,12 @@ class Ledger:
     def redistribute(self, account: str, amount: int, now: int) -> None:
         with self.s.transaction():
             new_vault, credited = redistribute(self.vault(), amount)
-            self.s.put_account(VAULT, new_vault, now)
+            self._put(VAULT, new_vault, now)
             bal = self.settle(account, now)
-            self.s.put_account(account, bal + credited, now)
-            self.s.append_event("redistribute", account, credited, now)
+            self._put(account, bal + credited, now)
+            self._event("redistribute", account, credited, now)
 
     def spend_nullifier(self, n: int, now: int) -> None:
         with self.s.transaction():
             self.s.add_nullifier(n)
-            self.s.append_event("nullifier", hex(n), 0, now)
+            self._event("nullifier", hex(n), 0, now)
