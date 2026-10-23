@@ -1,0 +1,56 @@
+name: physical-notes
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+env:
+  CIRCOM_VERSION: v2.1.9
+  CIRCOMSPECT_VERSION: 0.9.0
+
+jobs:
+  notes-circuit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: install circom
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL -o "$HOME/.local/bin/circom" \
+            "https://github.com/iden3/circom/releases/download/${CIRCOM_VERSION}/circom-linux-amd64"
+          chmod +x "$HOME/.local/bin/circom"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/circomspect
+          key: circomspect-${{ env.CIRCOMSPECT_VERSION }}
+      - name: install circomspect
+        run: command -v circomspect || cargo install --locked circomspect --version "$CIRCOMSPECT_VERSION"
+      - name: circomspect (note circuit, all findings fail)
+        run: circomspect -L node_modules circuits/note/note_deposit.circom
+      - run: pip install -r requirements-test.txt && pip install -e .
+      - name: note ledger + Groth16 deposit proofs (fail-closed)
+        env:
+          TCL_REQUIRE_ZK: "1"
+        run: pytest -q tests/test_notes_ledger.py tests/test_note_zk.py
+
+  notes-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge build --sizes
+      - name: NoteController tests (real proofs, fuzz, invariant)
+        run: forge test -vv --match-path test/contracts/NoteController.t.sol
