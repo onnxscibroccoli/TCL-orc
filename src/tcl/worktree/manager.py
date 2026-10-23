@@ -29,11 +29,24 @@ class WorktreeConflict(WorktreeError):
 
 
 class WorktreeManager:
-    def __init__(self, repo: str | Path, base_dir: str = ".worktrees") -> None:
+    def __init__(self, repo: str | Path, base_dir: str = ".worktrees",
+                 layout: str = "nested") -> None:
+        """``layout="nested"``: ``<repo>/.worktrees/<branch>`` (Phase 1 default).
+        ``layout="sibling"``: flat ``<repo>/../worktrees/worktree-<id>``; all share
+        the root repository's object store via ``$GIT_COMMON_DIR``.
+        The registry always lives in ``<repo>/.worktrees``."""
+        if layout not in ("nested", "sibling"):
+            raise WorktreeError(f"unknown layout {layout!r}")
         self.repo = Path(repo).resolve()
-        self.base = self.repo / base_dir
-        self.registry = self.base / "registry.json"
-        self.lockfile = self.base / ".lock"
+        self.layout = layout
+        self.state_dir = self.repo / base_dir
+        self.base = self.state_dir if layout == "nested" else self.repo.parent / "worktrees"
+        self.registry = self.state_dir / "registry.json"
+        self.lockfile = self.state_dir / ".lock"
+
+    def path_for(self, branch: str) -> Path:
+        name = self.sanitize(branch)
+        return self.base / (name if self.layout == "nested" else f"worktree-{name}")
 
     # -- infra ---------------------------------------------------------
     def _git(self, *args: str, cwd: Path | None = None) -> str:
@@ -44,7 +57,7 @@ class WorktreeManager:
 
     @contextmanager
     def _locked(self):
-        self.base.mkdir(parents=True, exist_ok=True)
+        self.state_dir.mkdir(parents=True, exist_ok=True)
         with open(self.lockfile, "a+") as fh:
             fcntl.flock(fh, fcntl.LOCK_EX)
             try:
@@ -78,7 +91,8 @@ class WorktreeManager:
     def create(self, branch: str, base: str = "HEAD", claims: Iterable[str] = (),
                task_id: str | None = None) -> dict:
         name = self.sanitize(branch)
-        path = self.base / name
+        path = self.path_for(branch)
+        self.base.mkdir(parents=True, exist_ok=True)
         claims = sorted(set(claims))
         with self._locked() as data:
             # conflict guard
@@ -133,3 +147,21 @@ class WorktreeManager:
             del data[branch]
             self._git("worktree", "prune")
         log.info("worktree.remove", extra={"branch": branch})
+
+    def health(self) -> list[dict]:
+        """Health of each registered worktree: path exists, git knows it, HEAD resolves."""
+        known = set(self.git_worktrees())
+        out = []
+        for rec in self.list():
+            p = Path(rec["path"])
+            head_ok = p.exists() and subprocess.run(
+                ["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=p,
+                capture_output=True).returncode == 0
+            ok = p.exists() and str(p) in known and head_ok
+            out.append({"branch": rec["branch"], "path": str(p), "state": rec["task"]["state"],
+                        "exists": p.exists(), "registered": str(p) in known, "healthy": ok})
+        return out
+
+    def common_dir(self, path: str | Path) -> Path:
+        return Path(self._git("rev-parse", "--path-format=absolute", "--git-common-dir",
+                              cwd=Path(path)).strip())

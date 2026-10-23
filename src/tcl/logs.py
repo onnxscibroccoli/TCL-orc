@@ -30,11 +30,26 @@ def get_logger(name: str) -> _logging.Logger:
     return _logging.getLogger(f"tcl.{name}")
 
 
+class _StderrHandler(_logging.StreamHandler):
+    """Resolve sys.stderr at emit time (survives stream swaps by test runners)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    @property
+    def stream(self):
+        return sys.stderr
+
+    @stream.setter
+    def stream(self, _):
+        pass
+
+
 def configure(level: str = "INFO", stream=None) -> None:
     root = _logging.getLogger("tcl")
     for h in list(root.handlers):
         root.removeHandler(h)
-    h = _logging.StreamHandler(stream or sys.stderr)
+    h = _logging.StreamHandler(stream) if stream is not None else _StderrHandler()
     h.setFormatter(JsonFormatter())
     root.addHandler(h)
     root.setLevel(level.upper())
