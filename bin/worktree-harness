@@ -1,137 +1,15 @@
 #!/usr/bin/env bash
+# Thin compatibility shim: all logic lives in the Python CLI (tcl-cli worktree ...).
+# Usage: worktree-harness {create|remove|list|prune|health} [branch-name]
 set -euo pipefail
-
-WORKTREE_BASE_DIR=".worktrees"
-PORT_REGISTRY="${WORKTREE_BASE_DIR}/ports.json"
-BASE_PORT=8000
-
-usage() {
-    echo "Usage: $0 {create|remove|list|prune} [branch-name]"
-    exit 1
-}
-
-init_registry() {
-    mkdir -p "${WORKTREE_BASE_DIR}"
-    if [ ! -f "${PORT_REGISTRY}" ]; then
-        echo "{}" > "${PORT_REGISTRY}"
-    fi
-}
-
-allocate_port() {
-    local branch="$1"
-    init_registry
-    local assigned_port
-    assigned_port=$(python3 -c "
-import json, sys
-with open('${PORT_REGISTRY}', 'r+') as f:
-    data = json.load(f)
-    used_ports = set(data.values())
-    port = ${BASE_PORT}
-    while port in used_ports:
-        port += 1
-    data['$branch'] = port
-    f.seek(0)
-    json.dump(data, f, indent=2)
-    f.truncate()
-    print(port)
-")
-    echo "${assigned_port}"
-}
-
-release_port() {
-    local branch="$1"
-    if [ -f "${PORT_REGISTRY}" ]; then
-        python3 -c "
-import json
-with open('${PORT_REGISTRY}', 'r+') as f:
-    data = json.load(f)
-    if '$branch' in data:
-        del data['$branch']
-        f.seek(0)
-        json.dump(data, f, indent=2)
-        f.truncate()
-"
-    fi
-}
-
-create_worktree() {
-    local branch="$1"
-    local sanitized_branch="${branch//\//_}"
-    local path="${WORKTREE_BASE_DIR}/${sanitized_branch}"
-
-    if [ -d "${path}" ]; then
-        echo "Error: Path ${path} already exists."
-        exit 1
-    fi
-
-    local base_branch="main"
-    if git show-ref --verify --quiet refs/heads/develop; then
-        base_branch="develop"
-    fi
-
-    echo "Fetching latest changes from origin..."
-    git fetch origin "${base_branch}" || true
-
-    echo "Creating worktree at ${path} on branch ${branch}..."
-    if git show-ref --verify --quiet refs/remotes/origin/${base_branch}; then
-        git worktree add -b "${branch}" "${path}" "origin/${base_branch}" || git worktree add "${path}" "${branch}"
-    else
-        git worktree add -b "${branch}" "${path}" "${base_branch}" || git worktree add "${path}" "${branch}"
-    fi
-
-    local port
-    port=$(allocate_port "${branch}")
-    echo "Assigned local server PORT=${port}"
-
-    if [ -f ".worktree-copy" ]; then
-        while IFS= read -r line || [ -n "$line" ]; do
-            [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-            if [ -f "${line}" ]; then
-                cp "${line}" "${path}/${line}"
-            fi
-        done < .worktree-copy
-    fi
-
-    echo "PORT=${port}" > "${path}/.env.local"
-
-    if [ -f "pyproject.toml" ]; then
-        echo "Initializing Python environment via uv..."
-        (cd "${path}" && uv venv --allow-existing && uv pip install -e . > /dev/null 2>&1 || true)
-    fi
-
-    echo "Worktree successfully initialized at ${path}"
-}
-
-remove_worktree() {
-    local branch="$1"
-    local sanitized_branch="${branch//\//_}"
-    local path="${WORKTREE_BASE_DIR}/${sanitized_branch}"
-
-    if [ ! -d "${path}" ]; then
-        echo "Error: Worktree path ${path} does not exist."
-        exit 1
-    fi
-
-    echo "Removing worktree at ${path}..."
-    git worktree remove "${path}" --force
-    release_port "${branch}"
-    git worktree prune
-    echo "Worktree ${branch} successfully purged."
-}
-
-list_worktrees() {
-    git worktree list
-}
-
-prune_worktrees() {
-    git worktree prune
-    echo "Orphaned worktrees pruned."
-}
-
-case "${1:-}" in
-    create) [ -z "${2:-}" ] && usage; create_worktree "$2" ;;
-    remove) [ -z "${2:-}" ] && usage; remove_worktree "$2" ;;
-    list) list_worktrees ;;
-    prune) prune_worktrees ;;
-    *) usage ;;
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if command -v tcl-cli >/dev/null 2>&1; then cli=(tcl-cli)
+else cli=(env "PYTHONPATH=${here}/src${PYTHONPATH:+:$PYTHONPATH}" python3 -m tcl.cli); fi
+cmd="${1:-}"; shift || true
+case "$cmd" in
+    create|remove) [ -z "${1:-}" ] && { echo "Usage: $0 $cmd <branch>" >&2; exit 1; }
+                   exec "${cli[@]}" worktree "$cmd" "$@" --repo . ;;
+    list|health)   exec "${cli[@]}" worktree "$cmd" --repo . ;;
+    prune)         exec git worktree prune ;;
+    *) echo "Usage: $0 {create|remove|list|prune|health} [branch-name]" >&2; exit 1 ;;
 esac

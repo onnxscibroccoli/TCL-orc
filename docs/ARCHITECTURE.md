@@ -4,25 +4,32 @@ This document describes the layered architecture of the Thresholded Circulatory 
 Each layer is marked **Implemented**, **Partial**, or **Planned**.
 A layer is only marked Implemented when it has passing tests in `tests/` or `ledger/`.
 
-## Layer 1: Control Plane and Worktree Orchestration — Partial
-
-Implemented in Phase 1:
+## Layer 1: Control Plane and Worktree Orchestration — Implemented (Phase 2)
 
 - `src/tcl/orchestrator/state.py`: task state machine.
   Legal path is `PENDING → ALLOCATED → EXECUTING → VERIFYING → MERGED`.
-  Any non-terminal state may go to `FAILED`.
-  `MERGED` and `FAILED` are terminal.
-  Every other transition raises `IllegalTransition` and leaves state unchanged.
+  Any non-terminal state may go to `FAILED`; `MERGED` and `FAILED` are terminal.
+  Illegal transitions raise `IllegalTransition` and leave state unchanged.
+- `src/tcl/orchestrator/engine.py`: event-driven task DAG engine.
+  - `submit()` validates the whole graph (unknown deps, self-deps and cycles are rejected via DFS; nothing is persisted on rejection).
+  - A thread-safe ready queue feeds N worker threads. Terminal events re-evaluate dependents; a failed dependency fails dependents with `dependency_failed`.
+  - Commands run sandboxed: new session/process group, minimal environment (host secrets are not inherited), `resource.setrlimit` for CPU seconds, address space, open files, file size, core dumps and (opt-in) process count.
+  - A wall-clock timeout kills the whole process group and marks the task `FAILED`.
+  - Task specs and state-machine records persist in SQLite (WAL, `synchronous=FULL`). On restart, tasks caught mid-flight are failed with `engine_restart` (never silently resumed); `PENDING` tasks resume.
+  - With a `WorktreeManager`, each task gets its own worktree and is registered with the Conflict Guard. Verification and the merge decision are serialized under a lock.
+- `src/tcl/orchestrator/conflict_guard.py` (re-exported at `src/tcl/worktree/conflict_guard.py`): per active worktree, modified files = `git diff --name-only <base>` ∪ untracked (`git ls-files --others --exclude-standard`), minus `.env.local`.
+  Before a task may reach `MERGED`, the guard compares its set against every other active worktree. Any overlap emits a `ConflictAlert` (structured log, callbacks, daemon telemetry) and the task goes to `FAILED` with `conflict: <files>`.
 - `src/tcl/worktree/manager.py`: `WorktreeManager` wraps `git worktree`.
-  It allocates unique ports, writes `.env.local`, and keeps a registry at `.worktrees/registry.json` under an exclusive `flock`.
-  The conflict guard rejects a second active task on the same branch or path, and overlapping file claims between active tasks.
-  Claims are released when a task reaches a terminal state.
-- `bin/worktree-harness` remains for backwards compatibility; the Python manager supersedes it.
+  `layout="sibling"` (used by the engine and daemon) places worktrees at `<repo>/../worktrees/worktree-<id>`, all sharing the root `.git` object store (`$GIT_COMMON_DIR`). `layout="nested"` (`.worktrees/<id>`) remains the CLI default for compatibility.
+  The registry (`.worktrees/registry.json`, `flock`-guarded) records ports, claims and task state. `health()` checks that each path exists, is known to git and has a resolvable `HEAD`.
+- `src/tcl/daemon.py` (entrypoint `agents/daemon.py`): long-running daemon with a Unix-socket (mode `0600`) JSON-lines IPC: `health`, `submit`, `status`. It writes JSON telemetry (task states, conflict alerts, periodic worktree health) and runs a periodic Conflict Guard scan.
+- `agents/orchestrator.py`: compatibility entrypoint; validates `PLAN` as a DAG and prints a topological order.
+- `bin/worktree-harness`: thin shim over `tcl-cli worktree ...`.
 
-Planned:
+Known limits (honest scope):
 
-- `agents/daemon.py` driving tasks through the manager, including automated verification and merge.
-- Persisting task state in the ledger SQLite database instead of JSON.
+- `MERGED` means "verified and cleared by the Conflict Guard". The engine does not yet perform the `git merge` into the base branch; that lands with the integration pipeline.
+- `RLIMIT_*` limits are per process; there are no cgroup quotas yet, and the filesystem is not restricted beyond the worktree working directory.
 
 ## Layer 2: Off-Chain Ledger and State — Partial
 
@@ -127,7 +134,7 @@ Production needs a public ceremony ptau and a multi-party phase 2.
 
 Implemented in Phase 1:
 
-- `src/tcl/cli.py` (Typer): `tcl ledger init|deposit|balance|apply-decay|root|rollback|proof|verify-proof` and `tcl worktree list|create`. See `docs/API.md`.
+- `src/tcl/cli.py` (Typer, console scripts `tcl` and `tcl-cli`): `ledger init|deposit|balance|apply-decay|root|rollback|proof|verify-proof`, `worktree list|create|remove|health`, `task create|list|status`, `daemon start|health`, `zk compile|prove|verify|settle`, `chain deploy|settle`. See `docs/API.md`.
   All output is JSON.
 - `src/tcl/utils/logger.py` (`src/tcl/logs.py` re-exports it): JSON-lines structured logging under the `tcl.*` logger namespace.
 - `src/tcl/config.py`: pydantic-settings `Settings`. Precedence: kwargs > `TCL_*` env > `.env` > `config.yaml` (or `$TCL_CONFIG`) > defaults. The CLI currently reads `TCL_DB`, `TCL_TREE_DEPTH`, and `TCL_LOG_LEVEL` directly; routing it fully through `Settings` is planned.

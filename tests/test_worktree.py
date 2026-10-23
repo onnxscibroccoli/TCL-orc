@@ -56,3 +56,16 @@ def test_force_remove(git_repo):
     m.create("a")
     m.remove("a", force=True)
     assert m.list() == []
+
+
+def test_harness_shim(git_repo):
+    import json
+    import subprocess
+    from pathlib import Path
+    shim = Path(__file__).resolve().parent.parent / "bin/worktree-harness"
+    run = lambda *a: subprocess.run([str(shim), *a], cwd=git_repo, capture_output=True, text=True)
+    assert json.loads(run("create", "feat/s").stdout)["branch"] == "feat/s"
+    assert [x["branch"] for x in json.loads(run("list").stdout)] == ["feat/s"]
+    assert json.loads(run("health").stdout)[0]["healthy"]
+    assert run("remove", "feat/s", "--force").returncode == 0
+    assert run("bogus").returncode == 1
