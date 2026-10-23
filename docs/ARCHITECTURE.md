@@ -63,7 +63,7 @@ Implemented in Phase 1:
   All output is JSON.
 - `src/tcl/logs.py`: JSON-lines structured logging under the `tcl.*` logger namespace.
 - `Containerfile`: rootless image (UID 65534) that runs the full test suite.
-- `docs/ci/python-tests.yml` (staged; must be moved to `.github/workflows/` by a token with `workflow` scope): pytest on Python 3.11 to 3.13, plus a podman rootless container job.
+- `.github/workflows/ci.yml`: pytest on Python 3.11 to 3.13, plus a podman rootless container job.
 - `provenance.json`: SHA-256 hashes of key artifacts, the base commit, and test results.
 
 Planned:
