@@ -454,17 +454,19 @@ The two decay functions are **different functions**; the off-chain ledger and on
 
 ---
 
-## Physical currency (draft, under specification)
+## Physical currency (MVP, testnet only)
 
-> **Not implemented.** Nothing in `main` mints, tracks or redeems physical notes. The specification is being written.
+> **Experimental.** A physical-notes MVP is on `main`; it is not audited and uses a dev-only trusted setup.
 
 What exists today:
 
-- `contracts/PhysicalMintController.sol` is a skeleton: `lockNote` records a commitment and `redeemNote` unlocks it, with the proof check commented out.
-- `docs/04_physical_mint.md` is a four-sentence sketch (commitment lock, PUF-ownership proof, nullify on redemption).
-- The file name `circuits/puf_verify.circom` is historical. It now holds the ledger `StateTransition` circuit and has nothing to do with PUFs.
+- `contracts/physical/NoteController.sol` mints and redeems reusable notes. Each note keeps a permanent id and gets a fresh one-time spend code each time it re-enters the chain, so an old era's proof is rejected.
+- `circuits/note/note_deposit.circom` proves note ownership for a deposit; `contracts/verifiers/NoteDepositVerifier.sol` checks it on-chain.
+- Minting burns the face value, refunds an attested production cost (capped at 20%) and pays a reward of up to 1% from an incentive pool; when the pool is empty it falls back to a 1:1 swap. Denominations run from 5 to 500.
+- The earlier `PhysicalMintController.sol` skeleton has been removed.
+- The file name `circuits/puf_verify.circom` is historical. It holds the ledger `StateTransition` circuit and has nothing to do with PUFs.
 
-Open design questions, including how a physical note can circulate repeatedly like fiat cash rather than being single-use, how minting is structured, and how physical minting and cryptographic mining are incentivized, will be settled before any code lands.
+Known gaps: chip hardware is simulated, minting does not verify that a physical note exists, the hoarding threshold is per address rather than per person, and admin roles are not yet handed to governance.
 
 ## Documentation
 
