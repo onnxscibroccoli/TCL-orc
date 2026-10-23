@@ -1,5 +1,5 @@
 {
-  "base_commit": "5c98a030a8264f93efdb69e8d9ee195b7a95e5c2",
+  "base_commit": "a40fac97b6fd2dc702702ed0276932173df118d1",
   "branch": "feat/physical-notes",
   "artifacts": {
     "ledger/demurrage.py": "92506484c624fcee7aa8ff1b40e7be6108d1378cac5033834d45190579dd7202",
@@ -51,7 +51,7 @@
     "ledger/test_demurrage_fixed.py": "428406796236e843e6a0c41aece4fc61eefd6d2016a19b661eb148f53aa81b32",
     "ledger/test_nullifiers.py": "7371eb192a10c4687695a9fa1cb8cdcabacb945e5c555ddf63c11f67c07a0791",
     "contracts/CirculatoryEngine.sol": "3d505f6f4f437e65163821b07c70e165025508a59b71d6fa2b4b8467916994ae",
-    "contracts/physical/NoteController.sol": "63f77725b9fc88f873aac257684aff67e6494a4d5b7da41227d73011dfcc8948",
+    "contracts/physical/NoteController.sol": "db0d75643f4732b9b6172d8199524ad05572d92674ed1d0bc4f5148a1997f3a4",
     "Containerfile": "a4a74ec3523cfe6ac808dd930675864b3eeae9ffaaa66af3664bae48058dc637",
     "circuits/puf_verify.circom": "4dbcf4ae09a56a22261c1cf84e36fc95d9c34f62a43108be20f579e2ffddf5c3",
     "circuits/lib/merkle.circom": "4f595d10e1ed673ae863ef6ea7778a77e4ce5fe180b8277e8c6c6c80580ce4ea",
@@ -81,6 +81,6 @@
     "tests/test_phase4_units.py": "2c1d6be3af292fbe482cca153320e745f78e87edb600a8c82de2ff45376f8864",
     "docs/ARCHITECTURE.md": "b4fd0398a6394b909773ab4ffaf53fa18f6a3d4f54798cbcbcb67bde48cc8fc3",
     "docs/SETUP.md": "b422f834b4bf6e6ef1251db949c9b6dab2eef0f8f7be11df1ebc7f011f33aabe",
-    "docs/SECURITY.md": "529f53aaeba5fb38509ab3f7dae7c94aa6715c649a8582274200c60a029c1539"
+    "docs/SECURITY.md": "6db58868e29a73f7c3fbf8ace44ead50e1eaaec14d8c1f1e6caa08c0cae422c2"
   }
 }
