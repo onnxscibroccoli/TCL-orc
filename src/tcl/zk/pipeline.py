@@ -14,7 +14,8 @@ META = "tcl-build.json"
 
 def circuit_digest() -> str:
     """sha256 over all circuit sources; a cached build is reused only if it matches."""
-    from .prover import CIRCUITS_DIR
+    from .prover import circuits_dir
+    CIRCUITS_DIR = circuits_dir()
     h = hashlib.sha256()
     for p in sorted(CIRCUITS_DIR.rglob("*.circom")):
         h.update(p.relative_to(CIRCUITS_DIR).as_posix().encode() + b"\0" + p.read_bytes())
