@@ -4,7 +4,8 @@
 
 - Python 3.11 or newer
 - git 2.20 or newer
-- Optional: podman for rootless container runs
+- Optional: podman (rootless runs) or Docker with Compose v2 (`docker compose`)
+- For ZK + settlement: circom 2.1.9, node 20 + `npm ci` (snarkjs 0.7.6, circomlib), foundry (forge/cast/anvil), `git submodule update --init --recursive` (OpenZeppelin, forge-std)
 
 ## Install
 
@@ -18,7 +19,8 @@ pip install -e .
 ## Configuration
 
 Copy `.env.example` to `.env` or edit `config.yaml`.
-Environment variables (`TCL_DB`, `TCL_MODE`, `TCL_TREE_DEPTH`, `TCL_LOG_LEVEL`) override `.env`, and `.env` overrides `config.yaml`.
+Precedence: CLI flag > `TCL_*` env > `.env` > `config.yaml` (or `$TCL_CONFIG`) > defaults. All CLI commands resolve their options this way.
+Keys: `db`, `log_level`, `mode`, `tree_depth`, `socket`, `tasks_db`, `http_host`, `http_port`, `zk_build`, `zk_depth`, `ptau_power`, `rpc_url`, `chain_private_key`, `deployment` (env: `TCL_<KEY>`).
 The tree depth is fixed when a database is created. Opening it with another depth fails closed.
 
 ## Run tests
@@ -80,3 +82,38 @@ circomspect -a CS0005 -L node_modules circuits/puf_verify.circom circuits/lib/*.
 npx solhint 'contracts/**/*.sol' --ignore-path .solhintignore --max-warnings 0
 python scripts/gen_zk_fixture.py   # regenerates StateVerifier.sol and the proof fixture together
 ```
+
+## Phase 4: end-to-end (local)
+
+```bash
+anvil --port 8545 &                       # local EVM
+export TCL_DB=demo.db TCL_TREE_DEPTH=4    # ledger depth must equal the circuit depth (zk_depth=4)
+tcl zk compile                            # one-time, ~60 s, cached in .tcl/zk (DEV setup)
+NOW=$(date +%s); T0=$((NOW-3*86400))
+tcl ledger deposit alice 7000000000000000000000000 --now $T0
+tcl chain deploy                          # verifier from .tcl/zk zkey, genesis = ledger root
+tcl zk prove alice --now $((NOW-2)) --out proof.json
+tcl zk verify proof.json
+tcl chain settle proof.json               # prints the StateSettled event
+```
+
+Integration tests (skip without tools; `TCL_REQUIRE_ZK=1 TCL_REQUIRE_CHAIN=1` makes them fail closed):
+
+```bash
+TCL_ZK_CACHE=/tmp/zk pytest -q -s test/integration
+```
+
+## Docker Compose (Acceptance 1)
+
+```bash
+docker compose up --build -d --wait
+curl -fsS http://127.0.0.1:8787/health    # 200 {"status": "healthy", ...}
+docker compose run --rm toolchain         # circom/snarkjs/forge versions
+docker compose run --rm deploy            # deploy contracts to the compose anvil
+docker compose down -v
+```
+
+## Releases
+
+Push a tag `vX.Y.Z`; the `release` CI job builds wheel + sdist, writes `SHA256SUMS` and creates a GitHub release after every other job passes.
+Note: `tcl chain` / `tcl zk` use the repo's `contracts/`, `circuits/` and `lib/`, so they need a source checkout (or the container), not just the wheel.

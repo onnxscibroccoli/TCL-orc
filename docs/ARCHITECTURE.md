@@ -4,25 +4,32 @@ This document describes the layered architecture of the Thresholded Circulatory 
 Each layer is marked **Implemented**, **Partial**, or **Planned**.
 A layer is only marked Implemented when it has passing tests in `tests/` or `ledger/`.
 
-## Layer 1: Control Plane and Worktree Orchestration — Partial
-
-Implemented in Phase 1:
+## Layer 1: Control Plane and Worktree Orchestration — Implemented (Phase 2)
 
 - `src/tcl/orchestrator/state.py`: task state machine.
   Legal path is `PENDING → ALLOCATED → EXECUTING → VERIFYING → MERGED`.
-  Any non-terminal state may go to `FAILED`.
-  `MERGED` and `FAILED` are terminal.
-  Every other transition raises `IllegalTransition` and leaves state unchanged.
+  Any non-terminal state may go to `FAILED`; `MERGED` and `FAILED` are terminal.
+  Illegal transitions raise `IllegalTransition` and leave state unchanged.
+- `src/tcl/orchestrator/engine.py`: event-driven task DAG engine.
+  - `submit()` validates the whole graph (unknown deps, self-deps and cycles are rejected via DFS; nothing is persisted on rejection).
+  - A thread-safe ready queue feeds N worker threads. Terminal events re-evaluate dependents; a failed dependency fails dependents with `dependency_failed`.
+  - Commands run sandboxed: new session/process group, minimal environment (host secrets are not inherited), `resource.setrlimit` for CPU seconds, address space, open files, file size, core dumps and (opt-in) process count.
+  - A wall-clock timeout kills the whole process group and marks the task `FAILED`.
+  - Task specs and state-machine records persist in SQLite (WAL, `synchronous=FULL`). On restart, tasks caught mid-flight are failed with `engine_restart` (never silently resumed); `PENDING` tasks resume.
+  - With a `WorktreeManager`, each task gets its own worktree and is registered with the Conflict Guard. Verification and the merge decision are serialized under a lock.
+- `src/tcl/orchestrator/conflict_guard.py` (re-exported at `src/tcl/worktree/conflict_guard.py`): per active worktree, modified files = `git diff --name-only <base>` ∪ untracked (`git ls-files --others --exclude-standard`), minus `.env.local`.
+  Before a task may reach `MERGED`, the guard compares its set against every other active worktree. Any overlap emits a `ConflictAlert` (structured log, callbacks, daemon telemetry) and the task goes to `FAILED` with `conflict: <files>`.
 - `src/tcl/worktree/manager.py`: `WorktreeManager` wraps `git worktree`.
-  It allocates unique ports, writes `.env.local`, and keeps a registry at `.worktrees/registry.json` under an exclusive `flock`.
-  The conflict guard rejects a second active task on the same branch or path, and overlapping file claims between active tasks.
-  Claims are released when a task reaches a terminal state.
-- `bin/worktree-harness` remains for backwards compatibility; the Python manager supersedes it.
+  `layout="sibling"` (used by the engine and daemon) places worktrees at `<repo>/../worktrees/worktree-<id>`, all sharing the root `.git` object store (`$GIT_COMMON_DIR`). `layout="nested"` (`.worktrees/<id>`) remains the CLI default for compatibility.
+  The registry (`.worktrees/registry.json`, `flock`-guarded) records ports, claims and task state. `health()` checks that each path exists, is known to git and has a resolvable `HEAD`.
+- `src/tcl/daemon.py` (entrypoint `agents/daemon.py`): long-running daemon with a Unix-socket (mode `0600`) JSON-lines IPC: `health`, `submit`, `status`. It writes JSON telemetry (task states, conflict alerts, periodic worktree health) and runs a periodic Conflict Guard scan.
+- `agents/orchestrator.py`: compatibility entrypoint; validates `PLAN` as a DAG and prints a topological order.
+- `bin/worktree-harness`: thin shim over `tcl-cli worktree ...`.
 
-Planned:
+Known limits (honest scope):
 
-- `agents/daemon.py` driving tasks through the manager, including automated verification and merge.
-- Persisting task state in the ledger SQLite database instead of JSON.
+- `MERGED` means "verified and cleared by the Conflict Guard". The engine does not yet perform the `git merge` into the base branch; that lands with the integration pipeline.
+- `RLIMIT_*` limits are per process; there are no cgroup quotas yet, and the filesystem is not restricted beyond the worktree working directory.
 
 ## Layer 2: Off-Chain Ledger and State — Partial
 
@@ -84,7 +91,11 @@ The statement one proof makes:
 
 1. `Poseidon(accountId, oldBalance, oldTime)` sits at a hidden index under the public `oldRoot`.
 2. `dt = newTime - oldTime` is in `0..604800` (one Taylor step), and `fee` and `newBalance` follow the fixed-point rule exactly.
-3. `Poseidon(accountId, newBalance, newTime)` at the same index and with the same siblings gives the public `newRoot`.
+3. `Poseidon(accountId, newBalance, newTime)` at the same index and with the same siblings gives the intermediate `midRoot`.
+4. In `midRoot`, the vault leaf at the reserved index 0 is `Poseidon(VAULT_ID, vaultBalance, vaultTime)` (or empty before the first fee), and replacing it with `Poseidon(VAULT_ID, vaultBalance + fee, newTime)` (unchanged if `fee = 0`) gives the public `newRoot`.
+   The account must not be the vault (`accountId != VAULT_ID`, index != 0).
+
+So one proof covers the whole `Ledger.settle`, and `newRoot == Ledger.root()` after it.
 
 The public signals, in snarkjs order, are `[newRoot, fee, oldRoot, newTime]`.
 The account, its balances and its path stay private.
@@ -97,11 +108,9 @@ circomspect 0.9.0 reports nothing beyond CS0005 on those two lines.
 
 Prover: `src/tcl/zk/prover.py` runs compile (r1cs + wasm), witness (`snarkjs wtns calculate`), `groth16_setup` (dev ptau plus one local zkey contribution), `prove`, `verify`, `export_verifier` and `solidity_calldata`.
 `build_transition_input(ledger, account, now)` settles a real `Ledger` account and returns the circuit input.
-It checks fail-closed that the computed `newRoot` is in the ledger's journaled root history.
-
-The newRoot is the root right after the account-leaf update.
-`Ledger.settle` then updates the vault leaf in a second journaled step.
-Proving the vault leaf is not done yet: on-chain, `fee` is accumulated as `offchainFeesSettled`.
+It checks fail-closed that the intermediate root matches the vault path and that `newRoot` equals the ledger root after settle.
+On-chain, `fee` is accumulated as `offchainFeesSettled`; consecutive settlements chain on one deployment.
+`ensure_artifacts` keys its cache on a SHA-256 of all circuit sources, so a circuit change never reuses stale keys.
 
 The ptau and zkey are DEV ONLY and come from single-party local randomness.
 Production needs a public ceremony ptau and a multi-party phase 2.
@@ -121,20 +130,34 @@ Production needs a public ceremony ptau and a multi-party phase 2.
 - Tests are in `test/contracts/CirculatoryEngine.t.sol` (Foundry).
   They cover deposit, decay epochs, the surplus cap, withdraw, redistribute, access control, pause, UUPS upgrade, a reentrancy attacker and the epoch checks.
   A real-proof suite covers verify, StateSettled, replay, tampered fee and tampered proof.
+  A chained suite settles 3 consecutive real proofs (one with fee = 0) on one deployment and checks `stateRoot` equals the ledger root after each, and that an out-of-order proof is rejected.
   Invariant fuzzing checks conservation and the lazy/stored balance identity.
 
-## Layer 5: Interface and Delivery — Partial
+## Layer 5: Interface and Delivery — Implemented (Phase 4)
 
-Implemented in Phase 1:
+- `src/tcl/cli.py` (Typer, console scripts `tcl` and `tcl-cli`): `ledger init|deposit|balance|apply-decay|root|rollback|proof|verify-proof`, `worktree list|create|remove|health`, `task create|list|status`, `daemon start|health`, `zk compile|prove|verify|settle`, `chain deploy|settle`. All output is JSON; errors print `{"ok": false, "error": ...}` and exit 1. See `docs/API.md`.
+- **Config:** every CLI option defaults to `None` and resolves through `tcl.config.Settings`. Precedence: flag > `TCL_*` env > `.env` > `config.yaml` (or `$TCL_CONFIG`) > defaults. Invalid config fails closed (exit 1). Covered by `tests/test_phase4_units.py`.
+- `src/tcl/utils/logger.py` (`src/tcl/logs.py` re-exports it): JSON-lines structured logging under `tcl.*`.
+- **Daemon:** Unix socket JSON-lines IPC plus a read-only HTTP server: `GET /health` returns 200 when healthy, 503 when degraded, 404 otherwise. `--http-port` / `TCL_HTTP_PORT` (default 8787, 0 = off).
+- `src/tcl/zk/pipeline.py`: `ensure_artifacts` (cached compile + DEV Groth16 setup) and `prove_settlement` (settle ledger, prove, check public signals against ledger values, verify locally).
+- `src/tcl/chain/`: `anvil()` context manager, `deploy()` (assembles an out-of-tree Foundry project with a verifier exported from the *same* zkey, `forge create` for verifier, implementation and an ERC1967 proxy with `initialize`, then checks `stateRoot == genesis`), `settle_epoch()` (`cast send settleEpoch`, decodes `StateSettled` from the receipt; reverts and missing events fail closed).
+- `Containerfile` (multi-stage): `toolchain` (circom 2.1.9, snarkjs 0.7.6 on node 20, foundry v1.8.6, git), `app` (non-root UID 10001, default command = daemon with HTTP /health, solc pre-fetched), `test` (default/final stage; full suite with `TCL_REQUIRE_ZK=1 TCL_REQUIRE_CHAIN=1`).
+- `docker-compose.yml`: `anvil` and `tcl-daemon` with healthchecks; `toolchain` and `deploy` one-shots under the `tools` profile.
+- `.github/workflows/ci.yml` jobs: pytest (3.11–3.13), lint (ruff, solhint, circomspect), zk, contracts (forge), rootless-container (podman, full suite in the `test` stage), integration (Acceptance 4 with timings artifact), compose (Acceptance 1: `docker compose up --build --wait`, `curl /health` = 200, deploy on the compose network), wheel (build + install smoke on every PR), release (tags `v*`: wheel + sdist + SHA256SUMS, GitHub release; gated on all other jobs).
+- `provenance.json`: SHA-256 hashes of key artifacts, base commit, test results and e2e timings.
 
-- `src/tcl/cli.py` (Typer): `tcl ledger init|deposit|balance|apply-decay|root|rollback|proof|verify-proof` and `tcl worktree list|create`. See `docs/API.md`.
-  All output is JSON.
-- `src/tcl/utils/logger.py` (`src/tcl/logs.py` re-exports it): JSON-lines structured logging under the `tcl.*` logger namespace.
-- `src/tcl/config.py`: pydantic-settings `Settings`. Precedence: kwargs > `TCL_*` env > `.env` > `config.yaml` (or `$TCL_CONFIG`) > defaults. The CLI currently reads `TCL_DB`, `TCL_TREE_DEPTH`, and `TCL_LOG_LEVEL` directly; routing it fully through `Settings` is planned.
-- `Containerfile`: rootless image (UID 65534) that runs the full test suite.
-- `.github/workflows/ci.yml` has these jobs: pytest on Python 3.11 to 3.13; lint (ruff, solhint, circomspect); zk (circom 2.1.9 and snarkjs 0.7.6, Groth16 tests with `TCL_REQUIRE_ZK=1` so they fail closed); contracts (`forge build` and `forge test`); and the podman rootless container.
-- `provenance.json`: SHA-256 hashes of key artifacts, the base commit, and test results.
+## End-to-end flow (Acceptance 4)
+
+`test/integration/test_full_pipeline.py`:
+
+1. A task is submitted to the daemon over the socket; the engine allocates a sibling worktree (`../worktrees/worktree-task_<id>`), runs the command (which writes a code change), verifies, Conflict-Guard-checks and marks it MERGED.
+2. The change is applied to a persistent SQLite WAL ledger (depth-4 Poseidon tree).
+3. `prove_settlement` settles one account and produces a Groth16 proof of the state transition.
+4. Contracts are deployed to a throwaway anvil with genesis root = pre-settle ledger root.
+5. `settleEpoch` is sent; the test asserts `StateSettled(epoch=1, oldRoot, newRoot, fee, newTime)` matches the proof's public values, and that the whole window (submit → event) takes under 30 s. The one-time circuit compile + dev setup (~60 s on 1 core-class machines) is cached and timed separately.
+
+Multiple epochs: `test/integration/test_multi_epoch.py` runs 5 consecutive settlements (including a fee = 0 one) on one anvil deployment and asserts the on-chain `stateRoot` equals the ledger root after each.
 
 Planned:
 
-- Release packaging and signed provenance.
+- Signed provenance (Sigstore) and a batched (multi-account) settlement circuit; proving deposits/redistribution.

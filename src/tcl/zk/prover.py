@@ -25,6 +25,7 @@ from typing import Any, Optional
 
 from ..crypto.poseidon import FIELD_P, hash_account_id
 from ..ledger.demurrage_fixed import MAX_STEP_SECONDS
+from ..storage.db import VAULT
 from ..ledger.poseidon_tree import account_leaf, compute_root
 from ..utils.logger import get_logger
 
@@ -199,15 +200,22 @@ def solidity_calldata(proof: dict, public: list[str]) -> dict:
     }
 
 
-def build_transition_input(ledger, account: str, now: int) -> tuple[dict[str, str], dict[str, int]]:
+VAULT_INDEX = 0
+
+
+def build_transition_input(ledger, account: str, now: int) -> tuple[dict[str, Any], dict[str, int]]:
     """Settle ``account`` on the ledger and return (circuit input, expected public values).
 
-    The proof's newRoot is the ledger root immediately after the account leaf
-    update (before the vault leaf update in the same settle), which the ledger
-    journals; we check membership in :meth:`Ledger.roots` fail-closed.
+    The circuit proves the whole settle: the account leaf update followed by the
+    vault leaf update (vault += fee), so the proof's newRoot must equal
+    ``ledger.root()`` after settle. Checked fail-closed.
     """
     if ledger.mode != "fixed":
         raise ZkError("circuit implements the 'fixed' demurrage mode only")
+    if account == VAULT:
+        raise ZkError("the vault cannot be settled as an account")
+    if ledger.s.leaf_index(VAULT) != VAULT_INDEX:
+        raise ZkError(f"vault must occupy leaf index {VAULT_INDEX} (legacy store?)")
     a = ledger.s.get_account(account)
     if a is None:
         raise KeyError(account)
@@ -216,23 +224,35 @@ def build_transition_input(ledger, account: str, now: int) -> tuple[dict[str, st
     if not 0 <= dt <= MAX_STEP_SECONDS:
         raise ZkError(f"dt={dt} outside single-step range 0..{MAX_STEP_SECONDS}")
     pre = ledger.proof(account)
+    if pre.index == VAULT_INDEX:
+        raise ZkError("account occupies the vault leaf index")
     old_root = ledger.root()
     if pre.root != old_root or pre.leaf != account_leaf(account, old_bal, old_t):
         raise ZkError("ledger proof inconsistent with stored account")
-    vault_before = ledger.vault()
+    va = ledger.s.get_account(VAULT)
+    v_exists, (v_bal, v_t) = (1, va) if va is not None else (0, (0, 0))
     new_bal = ledger.settle(account, now)
-    fee = ledger.vault() - vault_before
+    fee = ledger.vault() - v_bal
     if old_bal - new_bal != fee:
         raise ZkError("settle did not conserve value")
-    new_root = compute_root(account_leaf(account, new_bal, now), pre.index, pre.siblings)
-    if new_root not in ledger.roots():
-        raise ZkError("computed newRoot not in ledger root history")
+    mid_root = compute_root(account_leaf(account, new_bal, now), pre.index, pre.siblings)
+    # vault siblings are identical in the intermediate and final trees
+    vp = ledger.tree.proof(VAULT_INDEX)
+    v_old_leaf = account_leaf(VAULT, v_bal, v_t) if v_exists else 0
+    if compute_root(v_old_leaf, VAULT_INDEX, vp.siblings) != mid_root:
+        raise ZkError("vault path inconsistent with intermediate root")
+    new_root = ledger.root()
+    v_new_leaf = account_leaf(VAULT, v_bal + fee, now) if fee else v_old_leaf
+    if compute_root(v_new_leaf, VAULT_INDEX, vp.siblings) != new_root:
+        raise ZkError("ledger root after settle disagrees with circuit model")
     inputs = {
         "oldRoot": str(old_root), "newTime": str(now),
         "accountId": str(hash_account_id(account)), "oldBalance": str(old_bal),
         "oldTime": str(old_t),
         "pathElements": [str(s) for s in pre.siblings],
         "pathIndices": [str(b) for b in pre.path_bits()],
+        "vaultExists": str(v_exists), "vaultBalance": str(v_bal), "vaultTime": str(v_t),
+        "vaultPathElements": [str(s) for s in vp.siblings],
     }
     expected = {"newRoot": new_root, "fee": fee, "oldRoot": old_root, "newTime": now}
     assert all(0 <= v < FIELD_P for v in expected.values())

@@ -27,6 +27,12 @@ class Ledger:
         self.s = storage
         self.mode = mode
         self.tree = PoseidonMerkleTree(storage, depth)
+        # Reserve leaf index 0 for the vault on fresh stores so the ZK circuit can
+        # pin the vault leaf position (VAULT_INDEX). Assigning an index does not
+        # write a leaf, so the root is unchanged.
+        if storage.leaf_index(VAULT) is None:
+            with storage.transaction():
+                storage.assign_leaf(VAULT)
 
     # --- state tree ---------------------------------------------------------
     def _put(self, account: str, balance: int, last_update: int) -> int:

@@ -34,6 +34,18 @@ ARTIFACTS = [
     "src/tcl/orchestrator/state.py",
     "src/tcl/worktree/manager.py",
     "src/tcl/cli.py",
+    "src/tcl/orchestrator/engine.py",
+    "src/tcl/orchestrator/conflict_guard.py",
+    "src/tcl/worktree/conflict_guard.py",
+    "src/tcl/daemon.py",
+    "agents/daemon.py",
+    "agents/orchestrator.py",
+    "bin/worktree-harness",
+    "tests/test_engine.py",
+    "tests/test_conflict_guard.py",
+    "tests/test_daemon.py",
+    "tests/test_acceptance_worktree.py",
+    "docs/API.md",
     "src/tcl/logs.py",
     "tests/test_storage.py",
     "tests/test_state_machine.py",
@@ -56,12 +68,27 @@ ARTIFACTS = [
     "test/contracts/CirculatoryEngine.t.sol",
     "test/contracts/fixtures/state_transition.json",
     "test/contracts/fixtures/verification_key.json",
+    "test/contracts/fixtures/state_transition_chain.json",
+    "test/integration/test_multi_epoch.py",
     "tests/test_zk_prover.py",
     "tests/test_circuit_hygiene.py",
     "scripts/gen_zk_fixture.py",
     "foundry.toml",
     "package.json",
     "package-lock.json",
+    "src/tcl/chain/__init__.py",
+    "src/tcl/chain/client.py",
+    "src/tcl/zk/pipeline.py",
+    "src/tcl/config.py",
+    "docker-compose.yml",
+    ".dockerignore",
+    "test/integration/conftest.py",
+    "test/integration/test_full_pipeline.py",
+    "test/integration/test_cli_zk_chain.py",
+    "tests/test_phase4_units.py",
+    "docs/ARCHITECTURE.md",
+    "docs/SETUP.md",
+    "docs/SECURITY.md",
 ]
 
 def sha256(path: Path) -> str:
@@ -85,6 +112,9 @@ def main():
     if tr:
         manifest["test_results"] = json.loads(tr)
         manifest["test_results"]["python"] = platform.python_version()
+    extra = os.environ.get("TCL_PROVENANCE_EXTRA")
+    if extra:
+        manifest.update(json.loads(extra))
     out = root / "provenance.json"
     out.write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))

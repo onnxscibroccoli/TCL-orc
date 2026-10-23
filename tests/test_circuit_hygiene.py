@@ -37,3 +37,21 @@ def test_depth_is_parameterized():
     src = (ROOT / "circuits/puf_verify.circom").read_text()
     assert "template StateTransition(depth)" in src
     assert "component main" not in src  # instantiated by prover / circuits/main
+
+
+def test_vault_id_constant_matches_ledger():
+    from tcl.crypto.poseidon import hash_account_id
+    from tcl.storage.db import VAULT
+    src = (ROOT / "circuits/puf_verify.circom").read_text()
+    m = re.search(r"function VAULT_ID\(\)\s*\{\s*return (\d+);", src)
+    assert m and int(m.group(1)) == hash_account_id(VAULT)
+
+
+def test_fresh_ledger_reserves_vault_leaf_zero():
+    from tcl.ledger.service import Ledger
+    from tcl.storage.db import VAULT, InMemoryStorage
+    led = Ledger(InMemoryStorage(), depth=4)
+    empty = led.root()
+    assert led.s.leaf_index(VAULT) == 0 and led.root() == empty
+    led.deposit("alice", 5, 1)
+    assert led.s.leaf_index("alice") == 1

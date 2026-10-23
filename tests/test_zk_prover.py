@@ -79,8 +79,43 @@ def test_circuit_matches_python_demurrage(tc, art, tmp_path, bal, dt):
 
 
 def _valid_inputs():
+    """Two settles so the proven one has an existing (non-empty) vault leaf."""
     led = _ledger_with(T + 1_000_000 * SCALE)
-    return build_transition_input(led, "alice", 1_000 + 2 * DAY)
+    build_transition_input(led, "alice", 1_000 + DAY)
+    inputs, exp = build_transition_input(led, "alice", 1_000 + 2 * DAY)
+    assert inputs["vaultExists"] == "1" and int(inputs["vaultBalance"]) > 0
+    return inputs, exp
+
+
+def test_new_root_is_ledger_root_after_settle_for_consecutive_settles(tc, art, tmp_path):
+    """The proven newRoot is the full post-settle ledger root (account AND vault),
+    so consecutive proofs chain: oldRoot_{i+1} == newRoot_i == ledger.root()."""
+    led = _ledger_with(T + 1_000_000 * SCALE)
+    prev = led.root()
+    vault_before = led.vault()
+    for acct, t in (("alice", 1_000 + DAY), ("bob", 1_000 + 2 * DAY),
+                    ("alice", 1_000 + 4 * DAY)):
+        inputs, exp = build_transition_input(led, acct, t)
+        assert exp["oldRoot"] == prev and exp["newRoot"] == led.root()
+        assert led.vault() == vault_before + exp["fee"]
+        assert led.verify_state()
+        root, fee = _outputs(tc, witness(art, inputs, tmp_path / "c.wtns", tc), tmp_path)
+        assert (root, fee) == (exp["newRoot"], exp["fee"])
+        prev, vault_before = led.root(), led.vault()
+
+
+def test_vault_cannot_be_proven_as_account():
+    led = _ledger_with(T + SCALE)
+    with pytest.raises(ZkError):
+        build_transition_input(led, "__vault__", 1_000 + DAY)
+
+
+def test_account_at_vault_index_rejected_by_circuit(tc, art, tmp_path):
+    """Forcing pathIndices to the vault slot (index 0) must not satisfy the circuit."""
+    inputs, _ = _valid_inputs()
+    inputs["pathIndices"] = ["0"] * DEPTH
+    with pytest.raises(ZkError):
+        witness(art, inputs, tmp_path / "bad.wtns", tc)
 
 
 @pytest.mark.parametrize("field,value", [
@@ -92,6 +127,13 @@ def _valid_inputs():
     ("newTime", lambda v: "999"),                        # time goes backwards
     ("pathIndices", lambda v: ["2"] + v[1:]),            # non-boolean path bit
     ("pathElements", lambda v: [str(int(v[0]) + 1)] + v[1:]),
+    # vault leaf update (second half of the settle)
+    ("vaultBalance", lambda v: str(int(v) + 1)),
+    ("vaultTime", lambda v: str(int(v) + 1)),
+    ("vaultExists", lambda v: str(1 - int(v))),
+    ("vaultExists", lambda v: "2"),
+    ("vaultPathElements", lambda v: [str(int(v[0]) + 1)] + v[1:]),
+    ("vaultPathElements", lambda v: v[:-1] + [str(int(v[-1]) + 1)]),
 ])
 def test_tampered_inputs_fail_witness(tc, art, tmp_path, field, value):
     inputs, _ = _valid_inputs()
@@ -135,7 +177,37 @@ def test_committed_fixture_matches_ledger_scenario():
     led.deposit(sc["account"], T + 2_000_000 * SCALE, sc["t0"])
     _, exp = build_transition_input(led, sc["account"], sc["t0"] + sc["dt"])
     assert {k: str(v) for k, v in exp.items()} == fx["public"]
+    assert exp["newRoot"] == led.root()
     assert fx["publicSignals"] == [fx["public"][k] for k in ("newRoot", "fee", "oldRoot", "newTime")]
+
+
+def _chain_fixture():
+    from tcl.zk.prover import REPO_ROOT
+    return json.loads((REPO_ROOT / "test/contracts/fixtures/state_transition_chain.json").read_text())
+
+
+def test_chain_fixture_matches_ledger_and_links():
+    fx = _chain_fixture()
+    led = Ledger(InMemoryStorage(), mode="fixed", depth=fx["depth"])
+    led.deposit("bob", 42 * SCALE, fx["t0"])
+    led.deposit("alice", T + 2_000_000 * SCALE, fx["t0"])
+    prev = str(led.root())
+    fees = []
+    for st in fx["steps"]:
+        _, exp = build_transition_input(led, st["account"], st["now"])
+        assert {k: str(v) for k, v in exp.items()} == st["public"]
+        assert st["public"]["oldRoot"] == prev and st["ledgerRoot"] == str(led.root())
+        assert st["vault"] == str(led.vault())
+        prev = st["public"]["newRoot"]
+        fees.append(exp["fee"])
+    assert len(fx["steps"]) >= 3 and 0 in fees and sum(f > 0 for f in fees) >= 2
+
+
+def test_chain_fixture_verifies(tc, tmp_path):
+    from tcl.zk.prover import REPO_ROOT
+    vkey = REPO_ROOT / "test/contracts/fixtures/verification_key.json"
+    for st in _chain_fixture()["steps"]:
+        assert verify(vkey, st["proof"], st["publicSignals"], tmp_path, tc)
 
 
 def test_committed_fixture_verifies(tc, tmp_path):
