@@ -104,8 +104,8 @@ jobs:
         run: |
           forge test -vv --match-path 'test/contracts/governance/*' | tee /tmp/gov.txt
           grep -Eq '[1-9][0-9]* tests passed, 0 failed' /tmp/gov.txt
-      - name: handoff script compiles
-        run: forge build script/HandoffEngineOwnership.s.sol
+      - name: handoff + finalize scripts compile
+        run: forge build script/HandoffEngineOwnership.s.sol script/FinalizeEngine.s.sol
 
   rootless-container:
     runs-on: ubuntu-latest
