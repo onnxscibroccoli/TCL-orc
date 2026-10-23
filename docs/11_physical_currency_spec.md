@@ -164,8 +164,8 @@ Source: Gemini deep research (user-supplied, 2026-10-23, master), Part A. Claims
 - Coating PUFs: a particle matrix over the chip that is destroyed by decapping.
 - SRAM PUFs: power-up state of the chip's memory; need a fuzzy extractor.
 - RF PUFs: antenna impedance signatures.
-- NXP NTAG 424 DNA: AES-128 CMAC "SUN" messages with a tap counter, about \$0.20–0.35.
-- Asymmetric secure elements (NXP SE050, Infineon SLE78): about \$1.10–1.80.
+- NXP NTAG 424 DNA: AES-128 CMAC "SUN" messages with a tap counter, about USD 0.20–0.35.
+- Asymmetric secure elements (NXP SE050, Infineon SLE78): about USD 1.10–1.80.
 - Prior art: transferable e-cash (Chaum; Brands; Okamoto–Ohta; Baldimtsi et al.) and hardware-enforced offline CBDC pilots (ECB digital euro offline, BIS Project Polaris, e-CNY hardware wallets).
 
 The report proposes a commitment $`C_{\mathrm{note}} = H(\mathsf{NoteID}, S_{\mathrm{secret}})`$, a deposit nullifier $`N_{\mathrm{dep}} = H(S_{\mathrm{secret}}, \mathsf{DepositNonce})`$, and re-arming by writing a new secret $`S'`$ to the SE.
@@ -361,13 +361,13 @@ R_d = \min\!\Big(V_d\,\rho_{\max}\max\!\big(0,\ 1 - \tfrac{P}{p^{*}M}\big),\ \tf
 
 | Volume | 10k | 1M | 100M |
 | --- | --- | --- | --- |
-| Total $`C`$ | \$5.00 | \$0.75 | \$0.23 |
+| Total $`C`$ | USD 5.00 | USD 0.75 | USD 0.23 |
 
-The component sums check out. **Inconsistency:** the table's SE line (\$0.11–1.25) is NTAG-class, while the report's own matrix prices the asymmetric SE050 class at \$1.10–1.80. Since §4.6 requires an asymmetric SE, realistic $`C`$ at 1M units is about \$1.6–2.3 (estimate †).
+The component sums check out. **Inconsistency:** the table's SE line (USD 0.11–1.25) is NTAG-class, while the report's own matrix prices the asymmetric SE050 class at USD 1.10–1.80. Since §4.6 requires an asymmetric SE, realistic $`C`$ at 1M units is about USD 1.6–2.3 (estimate †).
 
-**Q6 (denominations).** The report proposes 5, 10, 20, 50, 100 and 500, with $`V_{\max} = 500`$ TCL, citing a clone cost of \$50k–150k "per design iteration".
+**Q6 (denominations).** The report proposes 5, 10, 20, 50, 100 and 500, with $`V_{\max} = 500`$ TCL, citing a clone cost of USD 50k–150k "per design iteration".
 
-**Error:** a per-*design* setup cost is amortized over every clone made, so the right test from §7.5 is on the *marginal* clone cost, $`\Pi = nN_cV - K_{\mathrm{setup}} - N_c K_{\mathrm{marginal}}`$. This spec adopts the denomination set provisionally, pending a marginal-cost estimate, with $`V_{\max} = 500`$ as an upper bound. It also mixes TCL and \$ units without an exchange rate.
+**Error:** a per-*design* setup cost is amortized over every clone made, so the right test from §7.5 is on the *marginal* clone cost, $`\Pi = nN_cV - K_{\mathrm{setup}} - N_c K_{\mathrm{marginal}}`$. This spec adopts the denomination set provisionally, pending a marginal-cost estimate, with $`V_{\max} = 500`$ as an upper bound. It also mixes TCL and USD units without an exchange rate.
 
 ---
 
@@ -615,7 +615,7 @@ Source for every "Gemini rec" entry: Gemini deep research (user-supplied, 2026-1
 | 3 | Personhood floor | 10,000 TCL | **A** | $`\theta_{\min} = 10^4 S`$ | No |
 | 4 | Genesis distribution | 70% PoP airdrop and 30% auction; no penalty exemption | **M**: the exemption is moot because §6 has no holding penalty; the auction needs a counter-asset and price-setter | 70/30 split as proposal; no exemption flag needed ($`g`$ kept for audit only) | **Yes** (split, auction) |
 | 5 | Offline staleness | $`T_{\max} = 30`$ d or 1,000 taps | **A**: bounds clone chains | Wallet warns past $`T_{\max}`$; SE refuses past 1,000 taps without sync | No |
-| 6 | Denominations | 5–500, $`V_{\max} = 500`$ | **M**: clone-cost argument uses a per-design cost, not the marginal cost (§7.6); mixes TCL and \$ | Adopt the set provisionally; confirm $`V_{\max}`$ after a marginal-cost estimate | Yes (confirm) |
+| 6 | Denominations | 5–500, $`V_{\max} = 500`$ | **M**: clone-cost argument uses a per-design cost, not the marginal cost (§7.6); mixes TCL and USD | Adopt the set provisionally; confirm $`V_{\max}`$ after a marginal-cost estimate | Yes (confirm) |
 | 7 | Proof-of-work | Drop it | **A** | $`\delta = 0`$ permanently | No |
 | 8 | Proof batching | Nova or Plonky2 aggregation in a Groth16 wrapper, about 220k gas | **A**: plausible gas, verify on Anvil | Roadmap; current circuit unchanged | No |
 | 9 | Emission and split | 100% demurrage plus 50% tx fees; 20/80 with queue-latency controller | **M**: TCL has no protocol tx fee; Part C controller is unbounded | Fund vault from demurrage and penalties; bounded $`\alpha(L)`$ from §9.4 | **Yes** (add a protocol fee?) |
