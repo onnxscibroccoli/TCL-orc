@@ -26,7 +26,7 @@
 User-confirmed requirements this draft must satisfy:
 
 | # | Requirement |
-|---|---|
+| --- | --- |
 | R1 | Physical notes are **reusable bearer cash**: passed hand to hand offline like fiat, fixed face denominations, anonymous holders, lost means lost. |
 | R2 | **No demurrage** accrues while a note is physical. |
 | R3 | **Anti-hoarding at re-entry**: no upfront fee; large re-entries above a threshold decay faster if parked idle; large re-entries are released gradually; all penalties go to the redistribution vault. |
@@ -42,7 +42,7 @@ User-confirmed requirements this draft must satisfy:
 All amounts are fixed-point integers with $`S = 10^{18}`$ base units per token (`SCALE` in `src/tcl/ledger/demurrage_fixed.py`, `RATE_SCALE` in `contracts/CirculatoryEngine.sol`).
 
 | Symbol | Meaning | Source / value |
-|---|---|---|
+| --- | --- | --- |
 | $`S`$ | Fixed-point scale | $`10^{18}`$ |
 | $`T`$ | Demurrage threshold (balances at or below are untouched) | $`5\,000\,000 \cdot S`$ (`T` in `demurrage_fixed.py`) |
 | $`r_d`$ | Daily demurrage rate on surplus | $`0.0005`$ |
@@ -61,7 +61,7 @@ b' = T + (b - T)\,e^{-\lambda \Delta t} \quad \text{for } b \gt T, \qquad b' = b
 with fee $`f = b - b'`$ credited to $`\mathcal{V}`$. New symbols introduced by this draft:
 
 | Symbol | Meaning |
-|---|---|
+| --- | --- |
 | $`d \in \mathcal{D}`$ | Denomination from a fixed set, face value $`V_d`$ |
 | $`\mathsf{id}`$ | Persistent note identity |
 | $`k`$ | Note era counter (increments on each re-entry) |
@@ -145,7 +145,7 @@ b_a \leftarrow b_a + V_d .
 Two options were considered after re-entry:
 
 | | Option A: re-arm the same note | Option B: retire and issue a fresh commitment |
-|---|---|---|
+| --- | --- | --- |
 | Physical object | Same note goes back into circulation | Note shredded or retired; new note minted |
 | Ledger | Same $`\mathsf{id}`$, new era $`k{+}1`$, fresh leaf | New $`\mathsf{id}'`$ and leaf |
 | Cost | Only the burn of $`V_d`$ (§7) | Full production cost again |
@@ -298,7 +298,7 @@ Design target: $`K_{\mathrm{clone}} \gt n_{\max} V_{\max}`$ for a realistic offl
 "Mining" means being paid for useful verifiable work, mainly settlement proofs.
 
 | Role | Work | Verified by |
-|---|---|---|
+| --- | --- | --- |
 | Prover | Groth16 proofs for settlement and re-entry | on-chain verifier (`StateVerifier`) |
 | Settler | submitting `settleEpoch`, batching re-entries | `StateSettled` event, `StaleRoot` checks |
 | Re-entry/mint relayer | aggregating offline deposits and receipts | proof inclusion |
@@ -376,7 +376,7 @@ x_{\mathrm{new}} \in [x_{\min},\ x_{\max}], \qquad |x_{\mathrm{new}} - x_{\mathr
 ```
 
 | Parameter | Default | Bounds | Max step / cycle |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | $`r_d`$ | 0.0005 | $`[0.0001, 0.002]`$ | 25% relative |
 | $`T`$, $`\Theta`$ | $`5\cdot10^6 S`$ | $`[10^5 S, 10^8 S]`$ | 25% |
 | $`\kappa`$ | 9 | $`[0, 20]`$ | 2 |
@@ -400,7 +400,7 @@ Every change waits out a timelock of $`\ge 14`$ days (30 for upgrades), during w
 ## 11. Threat model
 
 | Threat | Attack | Mitigation | Residual risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | PUF/SE cloning | Extract $`sk_{\mathsf{id}}`$, replicate $`\rho`$, spend copies offline | SE plus substrate-bound PUF; $`V_{\max} \lt K_{\mathrm{clone}}/n_{\max}`$; era nullifier makes only the first redemption valid; DORMANT broadcast on sync | Offline victims holding copies lose value |
 | Offline double-spend | Spend the same note to several receivers | Physical possession is exclusive; a clone reduces to the row above | Same as cloning |
 | Deposit and keep spending | Redeem, then keep passing the note | SE atomically goes DORMANT on redemption; receivers check the SE state | Compromised SE |
@@ -434,7 +434,7 @@ Every change waits out a timelock of $`\ge 14`$ days (30 for upgrades), during w
 ## 13. Pending research (awaiting Gemini results)
 
 | Topic | Feeds sections | Status |
-|---|---|---|
+| --- | --- | --- |
 | Reusable physical bearer notes (PUF, SE, offline e-cash, offline CBDC) | §4, §7.5, §11 | Awaiting results |
 | Demurrage history on physical currency (Wörgl, Freigeld, Chiemgauer) | §5, §6 | Awaiting results |
 | Mint and mine incentive models (proof markets, bonding, slashing) | §7, §8, §9 | Awaiting results |
