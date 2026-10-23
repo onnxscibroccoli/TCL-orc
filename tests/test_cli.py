@@ -35,7 +35,7 @@ def test_worktree_cli(git_repo):
 
 
 def test_structured_logging(tmp_path, capsys):
-    import io, logging
+    import io
     from tcl import logs
     buf = io.StringIO()
     logs.configure("INFO", stream=buf)

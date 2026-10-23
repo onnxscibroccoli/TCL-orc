@@ -2,7 +2,6 @@
 """Active event-driven agent daemon skeleton for TCL orchestration."""
 import time
 import subprocess
-from pathlib import Path
 
 def dispatch_task(task_id: str, worktree: str):
     print(f"[daemon] dispatching {task_id} into {worktree}")

@@ -1,8 +1,15 @@
 {
   "name": "tcl-orchestrator",
-  "version": "0.1.0",
-  "description": "Prototype multi-agent orchestration and demurrage redistribution for Thresholded Circulatory Ledger",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Thresholded Circulatory Ledger: orchestration, ZK circuits and contracts",
   "scripts": {
-    "orchestrate": "python3 agents/orchestrator.py"
+    "orchestrate": "python3 agents/orchestrator.py",
+    "lint:sol": "solhint 'contracts/**/*.sol' --ignore-path .solhintignore"
+  },
+  "devDependencies": {
+    "circomlib": "2.0.5",
+    "snarkjs": "0.7.6",
+    "solhint": "5.0.5"
   }
 }

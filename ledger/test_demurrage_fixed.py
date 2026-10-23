@@ -1,4 +1,3 @@
-import pytest
 from ledger.demurrage_fixed import apply_demurrage_fixed, T, SCALE
 
 def test_subthreshold_unchanged():
