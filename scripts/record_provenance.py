@@ -74,6 +74,19 @@ ARTIFACTS = [
     "foundry.toml",
     "package.json",
     "package-lock.json",
+    "src/tcl/chain/__init__.py",
+    "src/tcl/chain/client.py",
+    "src/tcl/zk/pipeline.py",
+    "src/tcl/config.py",
+    "docker-compose.yml",
+    ".dockerignore",
+    "test/integration/conftest.py",
+    "test/integration/test_full_pipeline.py",
+    "test/integration/test_cli_zk_chain.py",
+    "tests/test_phase4_units.py",
+    "docs/ARCHITECTURE.md",
+    "docs/SETUP.md",
+    "docs/SECURITY.md",
 ]
 
 def sha256(path: Path) -> str:
@@ -97,6 +110,9 @@ def main():
     if tr:
         manifest["test_results"] = json.loads(tr)
         manifest["test_results"]["python"] = platform.python_version()
+    extra = os.environ.get("TCL_PROVENANCE_EXTRA")
+    if extra:
+        manifest.update(json.loads(extra))
     out = root / "provenance.json"
     out.write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))

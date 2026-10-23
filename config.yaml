@@ -3,3 +3,14 @@ db: tcl.db
 log_level: WARNING
 mode: fixed        # linear | fixed
 tree_depth: 20     # Poseidon Merkle tree depth (capacity 2^depth accounts)
+# daemon
+socket: .tcl/daemon.sock
+tasks_db: .tcl/tasks.db
+http_host: 127.0.0.1
+http_port: 8787     # 0 disables the HTTP /health server
+# zk + chain (dev defaults; chain_private_key comes from env / .env only)
+zk_build: .tcl/zk
+zk_depth: 4
+ptau_power: 13
+rpc_url: http://127.0.0.1:8545
+deployment: .tcl/deployment.json

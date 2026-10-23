@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [ main ]
+    tags: [ "v*" ]
   pull_request:
 
 env:
@@ -94,5 +95,109 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - run: podman build -t tcl-test -f Containerfile .
+      # final stage `test`: full suite incl. ZK + anvil, TCL_REQUIRE_ZK/CHAIN=1 (fail-closed)
       - run: podman run --rm --userns=keep-id tcl-test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: install circom
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL -o "$HOME/.local/bin/circom" \
+            "https://github.com/iden3/circom/releases/download/${CIRCOM_VERSION}/circom-linux-amd64"
+          chmod +x "$HOME/.local/bin/circom"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+      - run: pip install -r requirements-test.txt && pip install -e .
+      - name: one-time circuit compile + dev setup (timed separately)
+        run: |
+          mkdir -p "$RUNNER_TEMP/zk"
+          /usr/bin/time -v tcl zk compile --build "$RUNNER_TEMP/zk" 2>&1 | tail -25
+      - name: Acceptance 4 end-to-end (task -> worktree -> ledger -> Groth16 -> anvil -> StateSettled, <30s)
+        env:
+          TCL_REQUIRE_ZK: "1"
+          TCL_REQUIRE_CHAIN: "1"
+          TCL_ZK_CACHE: ${{ runner.temp }}/zk
+        run: pytest -q -s test/integration
+      - if: always()
+        run: cat .tcl/e2e-timings.json || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-timings
+          path: .tcl/e2e-timings.json
+          if-no-files-found: ignore
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Acceptance 1 - docker compose up --build
+        run: docker compose up --build -d --wait --wait-timeout 300
+      - name: GET /health -> 200
+        run: |
+          code=$(curl -s -o /tmp/health.json -w '%{http_code}' http://127.0.0.1:8787/health)
+          cat /tmp/health.json; echo; echo "HTTP $code"
+          test "$code" = "200"
+          python3 -c "import json; assert json.load(open('/tmp/health.json'))['status']=='healthy'"
+      - name: anvil reachable + contracts deploy on the compose network
+        run: |
+          curl -fsS -X POST -H 'content-type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' http://127.0.0.1:8545
+          docker compose run --rm toolchain
+          docker compose run --rm deploy | tee /tmp/deploy.json
+          python3 -c "import json; d=json.loads(open('/tmp/deploy.json').read().strip().splitlines()[-1]); assert d['chain_id']==31337, d"
+      - if: failure()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down -v
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [pytest, lint, zk, contracts, integration, compose, rootless-container]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build && python -m build --wheel --sdist
+      - run: sha256sum dist/* | tee dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag
+
+  wheel:
+    # build check on every PR so the release job cannot be the first to find packaging bugs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build && python -m build --wheel
+      - run: pip install dist/*.whl && tcl --help && python -c "import tcl.chain, tcl.zk, tcl.daemon"

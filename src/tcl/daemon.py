@@ -19,6 +19,7 @@ import socket
 import socketserver
 import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .logs import get_logger
@@ -32,7 +33,8 @@ MAX_LINE = 1 << 20
 class Daemon:
     def __init__(self, socket_path: str | Path, db: str | Path = ":memory:",
                  repo: str | Path | None = None, workers: int = 4,
-                 telemetry: str | Path | None = None, health_interval: float = 30.0) -> None:
+                 telemetry: str | Path | None = None, health_interval: float = 30.0,
+                 http: tuple[str, int] | None = None) -> None:
         self.socket_path = Path(socket_path)
         self.started = time.time()
         self.manager = WorktreeManager(repo, layout="sibling") if repo else None
@@ -45,6 +47,8 @@ class Daemon:
         self.health_interval = health_interval
         self._server: socketserver.ThreadingUnixStreamServer | None = None
         self._stop = threading.Event()
+        self.http_addr = http
+        self._http: ThreadingHTTPServer | None = None
 
     def _telemetry(self, rec: dict) -> None:
         if self.telemetry:
@@ -111,10 +115,39 @@ class Daemon:
         self._server.daemon_threads = True
         self.engine.start()
         threading.Thread(target=self._server.serve_forever, daemon=True, name="tcl-ipc").start()
+        if self.http_addr is not None:
+            self._start_http()
         threading.Thread(target=self._monitor, daemon=True, name="tcl-health").start()
         self._telemetry({"event": "daemon.start", "ts": time.time(), "socket": str(self.socket_path)})
         log.info("daemon.start", extra={"socket": str(self.socket_path)})
         return self
+
+    def _start_http(self) -> None:
+        """Read-only HTTP endpoint: GET /health -> 200 (healthy) / 503 (degraded)."""
+        daemon = self
+
+        class HH(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802
+                if self.path.split("?")[0] not in ("/health", "/healthz"):
+                    code, body = 404, {"ok": False, "error": "not found"}
+                else:
+                    body = daemon.health()
+                    code = 200 if body["status"] == "healthy" else 503
+                data = json.dumps(body, default=str).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def log_message(self, fmt, *args) -> None:
+                log.debug("http", extra={"msg": fmt % args})
+
+        self._http = ThreadingHTTPServer(self.http_addr, HH)
+        self._http.daemon_threads = True
+        self.http_addr = self._http.server_address[:2]  # resolve port 0
+        threading.Thread(target=self._http.serve_forever, daemon=True, name="tcl-http").start()
+        log.info("daemon.http", extra={"addr": f"{self.http_addr[0]}:{self.http_addr[1]}"})
 
     def _monitor(self) -> None:
         while not self._stop.wait(self.health_interval):
@@ -131,6 +164,9 @@ class Daemon:
         if self._server:
             self._server.shutdown()
             self._server.server_close()
+        if self._http:
+            self._http.shutdown()
+            self._http.server_close()
         self.engine.stop()
         self.socket_path.unlink(missing_ok=True)
         self._telemetry({"event": "daemon.stop", "ts": time.time()})

@@ -130,18 +130,31 @@ Production needs a public ceremony ptau and a multi-party phase 2.
   A real-proof suite covers verify, StateSettled, replay, tampered fee and tampered proof.
   Invariant fuzzing checks conservation and the lazy/stored balance identity.
 
-## Layer 5: Interface and Delivery — Partial
+## Layer 5: Interface and Delivery — Implemented (Phase 4)
 
-Implemented in Phase 1:
+- `src/tcl/cli.py` (Typer, console scripts `tcl` and `tcl-cli`): `ledger init|deposit|balance|apply-decay|root|rollback|proof|verify-proof`, `worktree list|create|remove|health`, `task create|list|status`, `daemon start|health`, `zk compile|prove|verify|settle`, `chain deploy|settle`. All output is JSON; errors print `{"ok": false, "error": ...}` and exit 1. See `docs/API.md`.
+- **Config:** every CLI option defaults to `None` and resolves through `tcl.config.Settings`. Precedence: flag > `TCL_*` env > `.env` > `config.yaml` (or `$TCL_CONFIG`) > defaults. Invalid config fails closed (exit 1). Covered by `tests/test_phase4_units.py`.
+- `src/tcl/utils/logger.py` (`src/tcl/logs.py` re-exports it): JSON-lines structured logging under `tcl.*`.
+- **Daemon:** Unix socket JSON-lines IPC plus a read-only HTTP server: `GET /health` returns 200 when healthy, 503 when degraded, 404 otherwise. `--http-port` / `TCL_HTTP_PORT` (default 8787, 0 = off).
+- `src/tcl/zk/pipeline.py`: `ensure_artifacts` (cached compile + DEV Groth16 setup) and `prove_settlement` (settle ledger, prove, check public signals against ledger values, verify locally).
+- `src/tcl/chain/`: `anvil()` context manager, `deploy()` (assembles an out-of-tree Foundry project with a verifier exported from the *same* zkey, `forge create` for verifier, implementation and an ERC1967 proxy with `initialize`, then checks `stateRoot == genesis`), `settle_epoch()` (`cast send settleEpoch`, decodes `StateSettled` from the receipt; reverts and missing events fail closed).
+- `Containerfile` (multi-stage): `toolchain` (circom 2.1.9, snarkjs 0.7.6 on node 20, foundry v1.8.6, git), `app` (non-root UID 10001, default command = daemon with HTTP /health, solc pre-fetched), `test` (default/final stage; full suite with `TCL_REQUIRE_ZK=1 TCL_REQUIRE_CHAIN=1`).
+- `docker-compose.yml`: `anvil` and `tcl-daemon` with healthchecks; `toolchain` and `deploy` one-shots under the `tools` profile.
+- `.github/workflows/ci.yml` jobs: pytest (3.11–3.13), lint (ruff, solhint, circomspect), zk, contracts (forge), rootless-container (podman, full suite in the `test` stage), integration (Acceptance 4 with timings artifact), compose (Acceptance 1: `docker compose up --build --wait`, `curl /health` = 200, deploy on the compose network), wheel (build + install smoke on every PR), release (tags `v*`: wheel + sdist + SHA256SUMS, GitHub release; gated on all other jobs).
+- `provenance.json`: SHA-256 hashes of key artifacts, base commit, test results and e2e timings.
 
-- `src/tcl/cli.py` (Typer, console scripts `tcl` and `tcl-cli`): `ledger init|deposit|balance|apply-decay|root|rollback|proof|verify-proof`, `worktree list|create|remove|health`, `task create|list|status`, `daemon start|health`, `zk compile|prove|verify|settle`, `chain deploy|settle`. See `docs/API.md`.
-  All output is JSON.
-- `src/tcl/utils/logger.py` (`src/tcl/logs.py` re-exports it): JSON-lines structured logging under the `tcl.*` logger namespace.
-- `src/tcl/config.py`: pydantic-settings `Settings`. Precedence: kwargs > `TCL_*` env > `.env` > `config.yaml` (or `$TCL_CONFIG`) > defaults. The CLI currently reads `TCL_DB`, `TCL_TREE_DEPTH`, and `TCL_LOG_LEVEL` directly; routing it fully through `Settings` is planned.
-- `Containerfile`: rootless image (UID 65534) that runs the full test suite.
-- `.github/workflows/ci.yml` has these jobs: pytest on Python 3.11 to 3.13; lint (ruff, solhint, circomspect); zk (circom 2.1.9 and snarkjs 0.7.6, Groth16 tests with `TCL_REQUIRE_ZK=1` so they fail closed); contracts (`forge build` and `forge test`); and the podman rootless container.
-- `provenance.json`: SHA-256 hashes of key artifacts, the base commit, and test results.
+## End-to-end flow (Acceptance 4)
+
+`test/integration/test_full_pipeline.py`:
+
+1. A task is submitted to the daemon over the socket; the engine allocates a sibling worktree (`../worktrees/worktree-task_<id>`), runs the command (which writes a code change), verifies, Conflict-Guard-checks and marks it MERGED.
+2. The change is applied to a persistent SQLite WAL ledger (depth-4 Poseidon tree).
+3. `prove_settlement` settles one account and produces a Groth16 proof of the state transition.
+4. Contracts are deployed to a throwaway anvil with genesis root = pre-settle ledger root.
+5. `settleEpoch` is sent; the test asserts `StateSettled(epoch=1, oldRoot, newRoot, fee, newTime)` matches the proof's public values, and that the whole window (submit → event) takes under 30 s. The one-time circuit compile + dev setup (~60 s on 1 core-class machines) is cached and timed separately.
+
+Known gap: the proof's `newRoot` is the root after the account-leaf update but before the vault-leaf update (see `docs/SECURITY.md`), so a *second* epoch on the same deployment needs the planned two-leaf circuit.
 
 Planned:
 
-- Release packaging and signed provenance.
+- Signed provenance (Sigstore) and a two-leaf/batched settlement circuit.

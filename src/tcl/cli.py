@@ -8,12 +8,16 @@ from typing import List, Optional
 
 import typer
 
+from pydantic import ValidationError
+
 from . import logs
+from .config import Settings, get_settings
 from .ledger import Ledger, SQLiteStorage, StorageError
 from .ledger.poseidon_tree import MerkleProof, verify_proof
 from .worktree import WorktreeManager, WorktreeError
 
-app = typer.Typer(help="Thresholded Circulatory Ledger", no_args_is_help=True)
+app = typer.Typer(help="Thresholded Circulatory Ledger", no_args_is_help=True,
+                  pretty_exceptions_enable=False)
 ledger_app = typer.Typer(help="Off-chain ledger", no_args_is_help=True)
 wt_app = typer.Typer(help="Worktree orchestration", no_args_is_help=True)
 app.add_typer(ledger_app, name="ledger")
@@ -22,17 +26,30 @@ task_app = typer.Typer(help="Task DAG orchestration", no_args_is_help=True)
 daemon_app = typer.Typer(help="Long-running orchestrator daemon", no_args_is_help=True)
 app.add_typer(task_app, name="task")
 app.add_typer(daemon_app, name="daemon")
-SOCK = typer.Option(Path(".tcl/daemon.sock"), "--socket", envvar="TCL_SOCKET")
-TASK_DB = typer.Option(Path(".tcl/tasks.db"), "--tasks-db", envvar="TCL_TASKS_DB")
+zk_app = typer.Typer(help="Groth16 proving (circom + snarkjs)", no_args_is_help=True)
+chain_app = typer.Typer(help="EVM settlement (anvil/forge/cast)", no_args_is_help=True)
+app.add_typer(zk_app, name="zk")
+app.add_typer(chain_app, name="chain")
 
-DB = typer.Option(Path("tcl.db"), "--db", envvar="TCL_DB", help="SQLite ledger path")
-MODE = typer.Option("fixed", "--mode", help="linear|fixed")
-DEPTH = typer.Option(20, "--depth", envvar="TCL_TREE_DEPTH", help="Merkle tree depth")
+# Every option defaults to None and is resolved through tcl.config.Settings, so
+# precedence is: CLI flag > TCL_* env > .env > config.yaml ($TCL_CONFIG) > defaults.
+SOCK = typer.Option(None, "--socket", help="daemon socket [settings.socket]")
+TASK_DB = typer.Option(None, "--tasks-db", help="[settings.tasks_db]")
+DB = typer.Option(None, "--db", help="SQLite ledger path [settings.db]")
+MODE = typer.Option(None, "--mode", help="linear|fixed [settings.mode]")
+DEPTH = typer.Option(None, "--depth", help="Merkle tree depth [settings.tree_depth]")
+
+
+def cfg(**overrides) -> Settings:
+    try:
+        return get_settings(**overrides)
+    except ValidationError as e:
+        _fail(f"invalid configuration: {e}")
 
 
 @app.callback()
-def main(log_level: str = typer.Option("WARNING", "--log-level", envvar="TCL_LOG_LEVEL")) -> None:
-    logs.configure(log_level)
+def main(log_level: Optional[str] = typer.Option(None, "--log-level")) -> None:
+    logs.configure(cfg(log_level=log_level).log_level if log_level is None else log_level)
 
 
 def _now(now: Optional[int]) -> int:
@@ -40,39 +57,47 @@ def _now(now: Optional[int]) -> int:
 
 
 @ledger_app.command("init")
-def ledger_init(db: Path = DB) -> None:
+def ledger_init(db: Optional[Path] = DB) -> None:
+    db = cfg(db=db).db
     s = SQLiteStorage(db)
     typer.echo(json.dumps({"db": str(db), "journal_mode": s.journal_mode}))
 
 
 @ledger_app.command("deposit")
-def ledger_deposit(account: str, amount: int, db: Path = DB, mode: str = MODE,
+def ledger_deposit(account: str, amount: int, db: Optional[Path] = DB,
+                   mode: Optional[str] = MODE, depth: Optional[int] = DEPTH,
                    now: Optional[int] = typer.Option(None)) -> None:
-    bal = Ledger(SQLiteStorage(db), mode).deposit(account, amount, _now(now))
+    c = cfg(db=db, mode=mode, tree_depth=depth)
+    bal = Ledger(SQLiteStorage(c.db), c.mode, depth=c.tree_depth).deposit(account, amount, _now(now))
     typer.echo(json.dumps({"account": account, "balance": str(bal)}))
 
 
 @ledger_app.command("balance")
-def ledger_balance(account: str, db: Path = DB) -> None:
-    lg = Ledger(SQLiteStorage(db))
+def ledger_balance(account: str, db: Optional[Path] = DB, depth: Optional[int] = DEPTH) -> None:
+    c = cfg(db=db, tree_depth=depth)
+    lg = Ledger(SQLiteStorage(c.db), c.mode, depth=c.tree_depth)
     typer.echo(json.dumps({"account": account, "balance": str(lg.balance(account)),
                            "vault": str(lg.vault())}))
 
 
 @ledger_app.command("apply-decay")
-def ledger_apply_decay(db: Path = DB, mode: str = MODE,
+def ledger_apply_decay(db: Optional[Path] = DB, mode: Optional[str] = MODE,
+                       depth: Optional[int] = DEPTH,
                        now: Optional[int] = typer.Option(None)) -> None:
-    lg = Ledger(SQLiteStorage(db), mode)
+    c = cfg(db=db, mode=mode, tree_depth=depth)
+    lg = Ledger(SQLiteStorage(c.db), c.mode, depth=c.tree_depth)
     total = lg.apply_decay_all(_now(now))
     typer.echo(json.dumps({"extracted": str(total), "vault": str(lg.vault())}))
 
 
 @ledger_app.command("root")
-def ledger_root(db: Path = DB, depth: int = DEPTH,
+def ledger_root(db: Optional[Path] = DB, depth: Optional[int] = DEPTH,
                 history: bool = typer.Option(False, "--history", help="include all roots")) -> None:
     """Print current Poseidon state root (decimal + hex) and WAL integrity."""
-    s = SQLiteStorage(db)
-    lg = Ledger(s, depth=depth)
+    c = cfg(db=db, tree_depth=depth)
+    depth = c.tree_depth
+    s = SQLiteStorage(c.db)
+    lg = Ledger(s, c.mode, depth=depth)
     r = lg.root()
     out = {"root": str(r), "root_hex": hex(r), "depth": depth,
            "transitions": len(s.journal()), "integrity": s.integrity_check(),
@@ -84,10 +109,11 @@ def ledger_root(db: Path = DB, depth: int = DEPTH,
 
 @ledger_app.command("rollback")
 def ledger_rollback(root: str = typer.Option(..., "--root", help="prior root (dec or 0x hex)"),
-                    db: Path = DB, depth: int = DEPTH,
+                    db: Optional[Path] = DB, depth: Optional[int] = DEPTH,
                     now: Optional[int] = typer.Option(None)) -> None:
     """Restore state to a prior verified root from the journal."""
-    lg = Ledger(SQLiteStorage(db), depth=depth)
+    c = cfg(db=db, tree_depth=depth)
+    lg = Ledger(SQLiteStorage(c.db), c.mode, depth=c.tree_depth)
     try:
         undone = lg.rollback(int(root, 0), _now(now))
     except (StorageError, ValueError) as e:
@@ -98,9 +124,10 @@ def ledger_rollback(root: str = typer.Option(..., "--root", help="prior root (de
 
 
 @ledger_app.command("proof")
-def ledger_proof(account: str, db: Path = DB, depth: int = DEPTH) -> None:
+def ledger_proof(account: str, db: Optional[Path] = DB, depth: Optional[int] = DEPTH) -> None:
     """Emit a Merkle inclusion proof for an account leaf."""
-    lg = Ledger(SQLiteStorage(db), depth=depth)
+    c = cfg(db=db, tree_depth=depth)
+    lg = Ledger(SQLiteStorage(c.db), c.mode, depth=c.tree_depth)
     try:
         pf = lg.proof(account)
     except KeyError as e:
@@ -158,8 +185,9 @@ def _fail(msg: str) -> None:
     raise typer.Exit(1)
 
 
-def _ipc(sock: Path, req: dict) -> dict:
+def _ipc(sock: Optional[Path], req: dict) -> dict:
     from .daemon import request
+    sock = cfg(socket=sock).socket
     try:
         resp = request(sock, req)
     except (FileNotFoundError, ConnectionRefusedError) as e:
@@ -178,7 +206,7 @@ def task_create(task_id: str, command: List[str] = typer.Argument(..., help="arg
                 base: str = typer.Option("HEAD", "--base"),
                 memory_mb: int = typer.Option(1024, "--memory-mb"),
                 cpu_seconds: int = typer.Option(60, "--cpu-seconds"),
-                sock: Path = SOCK) -> None:
+                sock: Optional[Path] = SOCK) -> None:
     """Submit a task to the running daemon: tcl-cli task create ID -- cmd args..."""
     spec = {"task_id": task_id, "command": list(command), "depends": list(depends),
             "timeout": timeout, "branch": branch, "base": base,
@@ -187,30 +215,153 @@ def task_create(task_id: str, command: List[str] = typer.Argument(..., help="arg
 
 
 @task_app.command("list")
-def task_list(sock: Path = SOCK) -> None:
+def task_list(sock: Optional[Path] = SOCK) -> None:
     typer.echo(json.dumps(_ipc(sock, {"op": "status"})["tasks"], indent=2))
 
 
 @task_app.command("status")
-def task_status(task_id: str, sock: Path = SOCK) -> None:
+def task_status(task_id: str, sock: Optional[Path] = SOCK) -> None:
     typer.echo(json.dumps(_ipc(sock, {"op": "status", "task_id": task_id})["task"]))
 
 
 @daemon_app.command("start")
-def daemon_start(sock: Path = SOCK, db: Path = TASK_DB,
+def daemon_start(sock: Optional[Path] = SOCK, db: Optional[Path] = TASK_DB,
                  repo: Optional[Path] = typer.Option(None, "--repo"),
                  workers: int = typer.Option(4, "--workers"),
-                 telemetry: Optional[Path] = typer.Option(None, "--telemetry")) -> None:
+                 telemetry: Optional[Path] = typer.Option(None, "--telemetry"),
+                 http_host: Optional[str] = typer.Option(None, "--http-host"),
+                 http_port: Optional[int] = typer.Option(
+                     None, "--http-port", help="HTTP /health port, 0 = off [settings.http_port]"),
+                 ) -> None:
     """Run the daemon in the foreground (use a supervisor for background)."""
     from .daemon import Daemon
-    sock.parent.mkdir(parents=True, exist_ok=True)
-    db.parent.mkdir(parents=True, exist_ok=True)
-    Daemon(sock, db=db, repo=repo, workers=workers, telemetry=telemetry).serve_forever()
+    c = cfg(socket=sock, tasks_db=db, http_host=http_host, http_port=http_port)
+    c.socket.parent.mkdir(parents=True, exist_ok=True)
+    c.tasks_db.parent.mkdir(parents=True, exist_ok=True)
+    Daemon(c.socket, db=c.tasks_db, repo=repo, workers=workers, telemetry=telemetry,
+           http=(c.http_host, c.http_port) if c.http_port else None).serve_forever()
 
 
 @daemon_app.command("health")
-def daemon_health(sock: Path = SOCK) -> None:
+def daemon_health(sock: Optional[Path] = SOCK) -> None:
     typer.echo(json.dumps(_ipc(sock, {"op": "health"})))
+
+
+# ----------------------------------------------------------------------- zk
+BUILD = typer.Option(None, "--build", help="circuit build dir [settings.zk_build]")
+ZDEPTH = typer.Option(None, "--depth", help="circuit/tree depth [settings.zk_depth]")
+
+
+def _zk_guard(fn):
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        from .chain import ChainError
+        from .zk import ZkError
+        try:
+            return fn(*a, **kw)
+        except (ZkError, ChainError, KeyError, ValueError, StorageError, OSError) as e:
+            _fail(f"{type(e).__name__}: {e}")
+    return wrapper
+
+
+@zk_app.command("compile")
+@_zk_guard
+def zk_compile(build: Optional[Path] = BUILD, depth: Optional[int] = ZDEPTH,
+               ptau_power: Optional[int] = typer.Option(None, "--ptau-power"),
+               force: bool = typer.Option(False, "--force", help="rebuild even if cached")) -> None:
+    """Compile StateTransition(depth) and run a DEV-ONLY Groth16 setup (cached)."""
+    from .zk import ensure_artifacts
+    c = cfg(zk_build=build, zk_depth=depth, ptau_power=ptau_power)
+    t0 = time.time()
+    art = ensure_artifacts(c.zk_depth, c.zk_build, c.ptau_power, force=force)
+    typer.echo(json.dumps({"depth": art.depth, "r1cs": str(art.r1cs), "wasm": str(art.wasm),
+                           "zkey": str(art.zkey), "vkey": str(art.vkey),
+                           "seconds": round(time.time() - t0, 3), "dev_only": True}))
+
+
+@zk_app.command("prove")
+@_zk_guard
+def zk_prove(account: str, out: Path = typer.Option(Path("proof.json"), "--out"),
+             db: Optional[Path] = DB, build: Optional[Path] = BUILD,
+             depth: Optional[int] = ZDEPTH, now: Optional[int] = typer.Option(None)) -> None:
+    """Settle ACCOUNT on the ledger at NOW and write a verified Groth16 proof bundle."""
+    from .zk import ensure_artifacts, prove_settlement
+    c = cfg(db=db, zk_build=build, zk_depth=depth)
+    art = ensure_artifacts(c.zk_depth, c.zk_build, c.ptau_power)
+    lg = Ledger(SQLiteStorage(c.db), "fixed", depth=c.zk_depth)
+    t0 = time.time()
+    bundle = prove_settlement(lg, account, _now(now), art, c.zk_build / "work")
+    out.write_text(json.dumps(bundle, indent=2) + "\n")
+    typer.echo(json.dumps({"out": str(out), "public": bundle["public"], "verified": True,
+                           "seconds": round(time.time() - t0, 3)}))
+
+
+@zk_app.command("verify")
+@_zk_guard
+def zk_verify(proof_file: Path, vkey: Optional[Path] = typer.Option(None, "--vkey"),
+              build: Optional[Path] = BUILD) -> None:
+    """Verify a proof bundle with snarkjs. Exit 1 if invalid."""
+    from .zk import verify
+    c = cfg(zk_build=build)
+    b = json.loads(proof_file.read_text())
+    vk = vkey or c.zk_build / "verification_key.json"
+    ok = verify(vk, b["proof"], b["publicSignals"], c.zk_build / "work")
+    typer.echo(json.dumps({"valid": ok}))
+    if not ok:
+        raise typer.Exit(1)
+
+
+@zk_app.command("settle")
+@_zk_guard
+def zk_settle(proof_file: Path, deployment: Optional[Path] = typer.Option(None, "--deployment")
+              ) -> None:
+    """Submit a proof bundle to the deployed CirculatoryEngine (alias of `chain settle`)."""
+    chain_settle(proof_file, deployment)
+
+
+# -------------------------------------------------------------------- chain
+@chain_app.command("deploy")
+@_zk_guard
+def chain_deploy(rpc_url: Optional[str] = typer.Option(None, "--rpc-url"),
+                 db: Optional[Path] = DB, build: Optional[Path] = BUILD,
+                 depth: Optional[int] = ZDEPTH,
+                 genesis_time: Optional[int] = typer.Option(
+                     None, "--genesis-time", help="default: latest ledger timestamp"),
+                 committed_verifier: bool = typer.Option(
+                     False, "--committed-verifier",
+                     help="use contracts/verifiers/StateVerifier.sol instead of exporting "
+                          "one from the build zkey"),
+                 out: Optional[Path] = typer.Option(None, "--out")) -> None:
+    """Deploy StateVerifier + CirculatoryEngine (UUPS proxy) with genesis = ledger root."""
+    from .chain import deploy
+    c = cfg(db=db, zk_build=build, zk_depth=depth, rpc_url=rpc_url, deployment=out)
+    s = SQLiteStorage(c.db)
+    lg = Ledger(s, "fixed", depth=c.zk_depth)
+    if genesis_time is None:
+        times = [a[1] for a in (s.get_account(n) for n in s.accounts()) if a]
+        genesis_time = max(times) if times else 0
+    zkey = None if committed_verifier else c.zk_build / "circuit_final.zkey"
+    if zkey is not None and not zkey.exists():
+        _fail(f"{zkey} not found; run `tcl zk compile` or pass --committed-verifier")
+    dep = deploy(c.rpc_url, lg.root(), genesis_time, c.zk_build / "chain", zkey=zkey,
+                 key=c.chain_private_key)
+    c.deployment.parent.mkdir(parents=True, exist_ok=True)
+    c.deployment.write_text(json.dumps(dep.to_json(), indent=2) + "\n")
+    typer.echo(json.dumps({**dep.to_json(), "file": str(c.deployment)}))
+
+
+@chain_app.command("settle")
+@_zk_guard
+def chain_settle(proof_file: Path,
+                 deployment: Optional[Path] = typer.Option(None, "--deployment")) -> None:
+    """Call settleEpoch with a proof bundle; print the StateSettled event (exit 1 if absent)."""
+    from .chain import Deployment, settle_epoch
+    c = cfg(deployment=deployment)
+    dep = Deployment.load(c.deployment)
+    ev = settle_epoch(dep, json.loads(proof_file.read_text())["calldata"], key=c.chain_private_key)
+    typer.echo(json.dumps(ev))
 
 
 if __name__ == "__main__":  # pragma: no cover

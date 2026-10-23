@@ -38,6 +38,26 @@ If the daemon can't be reached they fail with exit 1 and do not fall back to any
 
 `init`, `deposit ACCOUNT AMOUNT`, `balance ACCOUNT`, `apply-decay` (`--db`, `--mode linear|fixed`, `--now`).
 
+### `tcl zk`
+
+| Command | Description |
+|---|---|
+| `zk compile [--build DIR] [--depth N] [--ptau-power P] [--force]` | Compile `StateTransition(N)` and run a DEV Groth16 setup; cached by depth. Prints paths + seconds. |
+| `zk prove ACCOUNT [--now T] [--out proof.json] [--db] [--build] [--depth]` | Settle ACCOUNT on the ledger at T, prove, verify locally. Writes a bundle `{public, publicSignals, proof, calldata, verified}`. |
+| `zk verify PROOF [--vkey F] [--build]` | snarkjs verify; `{"valid": bool}`, exit 1 if invalid. |
+| `zk settle PROOF [--deployment F]` | Alias of `chain settle`. |
+
+### `tcl chain`
+
+| Command | Description |
+|---|---|
+| `chain deploy [--rpc-url U] [--db] [--build] [--depth] [--genesis-time T] [--committed-verifier] [--out F]` | Deploy StateVerifier + CirculatoryEngine (ERC1967/UUPS proxy, `initialize(owner, verifier, 0, 0, ledgerRoot, T)`). Writes `deployment.json` `{rpc_url, chain_id, owner, verifier, implementation, engine, genesis_root, genesis_time}`. |
+| `chain settle PROOF [--deployment F]` | `settleEpoch(a, b, c, pubSignals)`; prints `{"event": "StateSettled", epoch, oldRoot, newRoot, fee, newTime, tx, block, gasUsed}`. Reverts (e.g. `StaleRoot` on replay) exit 1. |
+
+### Daemon HTTP
+
+`tcl daemon start --http-host H --http-port P` (defaults `127.0.0.1:8787`, `0` = off) serves `GET /health` (alias `/healthz`): the same JSON as the socket `health` op; 200 if `status == "healthy"`, 503 if degraded, 404 for other paths.
+
 ## Task spec (JSON)
 
 ```json

@@ -1,0 +1,57 @@
+# Local stack: anvil EVM node + TCL daemon (+ one-shot toolchain/deploy helpers).
+#   docker compose up --build -d --wait     # anvil + daemon, waits for healthchecks
+#   curl -fsS http://127.0.0.1:8787/health  # -> 200 {"status": "healthy", ...}
+#   docker compose run --rm deploy          # deploy contracts to the compose anvil
+name: tcl
+
+x-image: &image
+  build:
+    context: .
+    dockerfile: Containerfile
+    target: app
+  image: tcl-app:local
+
+services:
+  anvil:
+    <<: *image
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--port", "8545"]
+    ports: ["127.0.0.1:8545:8545"]
+    healthcheck:
+      test: ["CMD", "cast", "chain-id", "--rpc-url", "http://127.0.0.1:8545"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  tcl-daemon:
+    <<: *image
+    environment:
+      TCL_RPC_URL: http://anvil:8545
+      TCL_LOG_LEVEL: INFO
+    ports: ["127.0.0.1:8787:8787"]
+    depends_on:
+      anvil:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(urllib.request.urlopen('http://127.0.0.1:8787/health').status!=200)"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  toolchain:
+    <<: *image
+    profiles: ["tools"]
+    entrypoint: ["sh", "-c", "circom --version && snarkjs --version | head -1; forge --version | head -1 && tcl --help >/dev/null && echo toolchain-ok"]
+
+  deploy:
+    <<: *image
+    profiles: ["tools"]
+    environment:
+      TCL_RPC_URL: http://anvil:8545
+      TCL_DB: /tmp/tcl.db
+      TCL_TREE_DEPTH: "4"
+      TCL_DEPLOYMENT: /tmp/deployment.json
+    depends_on:
+      anvil:
+        condition: service_healthy
+    entrypoint: ["tcl", "chain", "deploy", "--committed-verifier", "--genesis-time", "1"]

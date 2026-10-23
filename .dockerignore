@@ -1,0 +1,13 @@
+.git
+.venv
+node_modules
+out
+cache
+broadcast
+.tcl
+**/__pycache__
+.pytest_cache
+*.egg-info
+*.db
+*.db-wal
+*.db-shm

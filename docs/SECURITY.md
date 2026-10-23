@@ -37,6 +37,16 @@ Don't deploy to a network that holds real value.
 5. **Settler trust:** `settleEpoch` is permissioned (settler or owner). Proofs bind the state, but the settler controls liveness.
 6. **Owner key:** a single `Ownable` owner. Use a multisig or timelock in production.
 
+7. **Consecutive epochs:** because of item 2, the on-chain `stateRoot` after `settleEpoch` is the intermediate (account-only) root, not the ledger's final root; a second epoch from the same ledger is rejected with `StaleRoot` (fail-closed, but not yet usable). Fixed by the two-leaf circuit.
+
+## Delivery-layer controls (Phase 4)
+
+- **Dev key:** `chain_private_key` defaults to anvil's public account #0 key so local runs work out of the box. It is only safe against local dev chains; set `TCL_CHAIN_PRIVATE_KEY` from a secret store for anything else, and never put it in `config.yaml`.
+- **HTTP /health** is read-only (GET only, no task submission) and binds to `127.0.0.1` by default; the container binds `0.0.0.0` but compose publishes it on `127.0.0.1:8787` only. Task submission stays on the `0600` Unix socket.
+- **Replay:** re-sending a settled proof reverts with `StaleRoot` (tested in `test/integration/test_cli_zk_chain.py`); a tampered public signal fails `tcl zk verify`.
+- **Verifier/zkey binding:** `tcl chain deploy` exports the verifier from the same zkey that `tcl zk prove` uses, and checks the deployed `stateRoot` equals the ledger root before writing `deployment.json`.
+- **Container:** non-root UID 10001; the podman CI job runs it rootless with `--userns=keep-id`.
+
 ## Reporting a vulnerability
 
 Open a private GitHub Security Advisory on `onnxscibroccoli/TCL-orc` (Security → Report a vulnerability).
