@@ -1,0 +1,6 @@
+include LICENSE CHANGELOG.md setup.py
+recursive-include circuits *.circom
+recursive-include contracts *.sol
+recursive-include lib/openzeppelin-contracts/contracts *.sol
+recursive-include lib/openzeppelin-contracts-upgradeable/contracts *.sol
+include lib/openzeppelin-contracts/LICENSE lib/openzeppelin-contracts-upgradeable/LICENSE

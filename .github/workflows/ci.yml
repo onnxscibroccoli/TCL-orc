@@ -91,6 +91,22 @@ jobs:
       - run: forge build --sizes
       - run: forge test -vv
 
+  governance:
+    # contracts/governance: bounded params, two-class timelock, conviction voting, bounties, handoff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge build
+      - name: governance tests (fail-closed, zero passing tests fails)
+        run: |
+          forge test -vv --match-path 'test/contracts/governance/*' | tee /tmp/gov.txt
+          grep -Eq '[1-9][0-9]* tests passed, 0 failed' /tmp/gov.txt
+      - name: handoff + finalize scripts compile
+        run: forge build script/HandoffEngineOwnership.s.sol script/FinalizeEngine.s.sol
+
   rootless-container:
     runs-on: ubuntu-latest
     steps:
@@ -172,32 +188,246 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [pytest, lint, zk, contracts, integration, compose, rootless-container]
+    needs: [pytest, lint, zk, contracts, integration, compose, rootless-container, wheel, deploy-dryrun, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write       # sigstore keyless signing + SLSA provenance (GitHub OIDC)
+      attestations: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # OZ sources are bundled into the wheel
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: tag must equal package version (fail-closed)
+        run: |
+          v=$(python -c "import ast,sys;print([n.value.value for n in ast.parse(open('src/tcl/__init__.py').read()).body if isinstance(n,ast.Assign) and n.targets[0].id=='__version__'][0])")
+          test "$GITHUB_REF_NAME" = "v$v" || { echo "tag $GITHUB_REF_NAME != v$v"; exit 1; }
+          grep -q "^## \[$v\]" CHANGELOG.md || { echo "CHANGELOG.md has no [$v] section"; exit 1; }
       - run: pip install build && python -m build --wheel --sdist
-      - run: sha256sum dist/* | tee dist/SHA256SUMS
+      - uses: anchore/sbom-action@v0
+        with:
+          path: dist/
+          format: spdx-json
+          output-file: dist/tcl-${{ github.ref_name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - run: cd dist && sha256sum * | tee SHA256SUMS
+      - uses: sigstore/cosign-installer@v3
+      - name: cosign keyless sign (bundle per file)
+        run: |
+          cd dist
+          for f in *; do
+            case "$f" in *.sigstore.json) continue;; esac
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+          done
+      - name: SLSA build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*.whl, dist/*.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag
+        run: |
+          pre=""; case "$GITHUB_REF_NAME" in *rc*|*a[0-9]*|*b[0-9]*) pre="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag $pre
+
+  image:
+    # PRs/main: build + smoke-test only. v* tags: push to GHCR, SBOM, cosign, provenance.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/tcl-orc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: docker/setup-buildx-action@v3
+      - name: build (amd64; circom ships no arm64 binary) and load for smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          target: app
+          platforms: linux/amd64
+          load: true
+          tags: tcl-app:ci
+      - name: smoke - non-root, tcl doctor, /readyz
+        run: |
+          uid=$(docker run --rm --entrypoint id tcl-app:ci -u); test "$uid" != 0
+          docker run --rm tcl-app:ci tcl doctor -c core -c chain -c zk
+          docker run -d --name tcl -p 127.0.0.1:8787:8787 tcl-app:ci
+          for i in $(seq 30); do curl -fsS http://127.0.0.1:8787/readyz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8787/readyz && curl -fsS http://127.0.0.1:8787/livez
+          docker rm -f tcl
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: startsWith(github.ref, 'refs/tags/v')
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{raw}}
+            type=sha
+          labels: |
+            org.opencontainers.image.licenses=Apache-2.0
+      - if: startsWith(github.ref, 'refs/tags/v')
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          target: app
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+          format: spdx-json
+          output-file: image.spdx.json
+          upload-release-assets: false
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: sigstore/cosign-installer@v3
+      - if: startsWith(github.ref, 'refs/tags/v')
+        name: cosign keyless sign image + attach SBOM attestation
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes "$REF"
+          cosign attest --yes --type spdxjson --predicate image.spdx.json "$REF"
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  deploy-dryrun:
+    # forge deploy/upgrade scripts against a throwaway anvil + fail-closed guard check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: ./scripts/deploy_dryrun.sh
 
   wheel:
     # build check on every PR so the release job cannot be the first to find packaging bugs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install build && python -m build --wheel
-      - run: pip install dist/*.whl && tcl --help && python -c "import tcl.chain, tcl.zk, tcl.daemon"
+      - run: pip install build && python -m build   # sdist, then wheel built from the sdist
+      - name: wheel works outside a checkout (bundled contracts/circuits)
+        run: |
+          python -m venv /tmp/w && /tmp/w/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/w/bin/tcl --help >/dev/null && /tmp/w/bin/tcl version
+          /tmp/w/bin/tcl doctor -c core
+          /tmp/w/bin/python -c "import tcl.chain, tcl.zk, tcl.daemon; from tcl.resources import resource_root as r; p=r('chain'); print(p, r('zk')); assert 'site-packages' in str(p)"
+          /tmp/w/bin/tcl doctor -c chain --json | tee /tmp/doc.json || true
+          /tmp/w/bin/python -c "import json; c={x['check']:x for x in json.load(open('/tmp/doc.json'))['checks']}; assert c['artifacts (contracts)']['ok']"
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: installed wheel deploys to anvil without a checkout
+        run: |
+          mkdir -p /tmp/wd && cd /tmp/wd
+          anvil --port 8599 --silent & sleep 2
+          TCL_DB=/tmp/wd/t.db /tmp/w/bin/tcl chain deploy --rpc-url http://127.0.0.1:8599 \
+            --committed-verifier --genesis-time 1 --build /tmp/wd/zk | tail -1 | python -c "import json,sys; assert json.load(sys.stdin)['chain_id']==31337"
+          TCL_RPC_URL=http://127.0.0.1:8599 /tmp/w/bin/tcl doctor -c chain --rpc
+
+  # ---------------------------------------------------------------- security
+  # Added by the deployment-readiness security pass (docs/SECURITY.md).
+  # All jobs are deterministic and fail closed.
+  slither:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # crytic-compile drives `forge build`, so forge's pinned solc 0.8.24 is used (no solc-select download).
+      - run: forge build
+      - run: pip install slither-analyzer==0.11.3
+      # slither.config.json: fails on medium+; excluded detectors justified in docs/SECURITY.md
+      - run: slither .
+
+  forge-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.6
+      - name: storage layout unchanged (upgrade safety)
+        run: python3 scripts/security/check_storage_layout.py
+      - name: high-run invariant + fuzz suite
+        env:
+          FOUNDRY_FUZZ_RUNS: "2048"
+          FOUNDRY_FUZZ_SEED: "0x7c1"
+          FOUNDRY_INVARIANT_DEPTH: "128"
+        run: forge test --match-path test/contracts/Security.t.sol -vv
+      - name: gas snapshot (2% tolerance)
+        run: forge snapshot --check --tolerance 2 --no-match-test "invariant|testFuzz"
+      - name: coverage gate (CirculatoryEngine lines >= 95%)
+        run: |
+          forge coverage --report summary --no-match-test invariant | tee cov.txt
+          python3 - <<'PY'
+          import re, sys
+          row = next(l for l in open("cov.txt") if "contracts/CirculatoryEngine.sol" in l)
+          pct = float(re.findall(r"([\d.]+)%", row)[0])
+          print("CirculatoryEngine line coverage", pct)
+          sys.exit(0 if pct >= 95.0 else 1)
+          PY
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: pip install pip-audit==2.7.3
+      - name: pip-audit over pinned requirements-test.lock
+        run: pip-audit -r requirements-test.lock --strict --no-deps --disable-pip
+      - name: npm audit (lockfile, high+)
+        run: npm audit --audit-level=high
+      - name: npm lockfile pinned
+        run: npm ci --ignore-scripts
+      - name: submodules pinned to commits
+        run: git ls-tree HEAD lib/ | awk '$2 != "commit" {print "unpinned:", $0; bad=1} END {exit bad}'

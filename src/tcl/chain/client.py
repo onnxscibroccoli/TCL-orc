@@ -21,9 +21,9 @@ from typing import Iterator, Optional
 from ..utils.logger import get_logger
 
 log = get_logger("chain")
-REPO_ROOT = Path(__file__).resolve().parents[3]
 # Anvil's well-known account #0 key (public; local dev chains only).
 ANVIL_DEV_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+DEV_CHAIN_IDS = frozenset({31337, 1337})
 STATE_SETTLED_SIG = "StateSettled(uint64,uint256,uint256,uint256,uint64)"
 SETTLE_SIG = "settleEpoch(uint256[2],uint256[2][2],uint256[2],uint256[4])"
 INIT_SIG = "initialize(address,address,uint256,uint256,uint256,uint64)"
@@ -95,7 +95,12 @@ def anvil(port: Optional[int] = None) -> Iterator[str]:
 def build_project(work: Path, zkey: Optional[Path] = None) -> Path:
     """Assemble + ``forge build`` a project with a verifier matching ``zkey``."""
     from ..zk import export_verifier
+    from ..resources import ResourcesMissing, resource_root
     tools = discover()
+    try:
+        REPO_ROOT = resource_root("chain")
+    except ResourcesMissing as e:
+        raise ChainError(str(e)) from e
     work = Path(work)
     src = work / "src"
     (src / "verifiers").mkdir(parents=True, exist_ok=True)
@@ -164,6 +169,9 @@ def deploy(rpc: str, genesis_root: int, genesis_time: int, work: Path,
            threshold: int = 0, rate_per_second: int = 0) -> Deployment:
     tools = discover()
     chain_id = wait_rpc(rpc, cast=tools["cast"])
+    if key.lower() == ANVIL_DEV_KEY and chain_id not in DEV_CHAIN_IDS:
+        raise ChainError(f"refusing to deploy to chain {chain_id} with the public anvil dev key; "
+                         "set TCL_CHAIN_PRIVATE_KEY (or use script/Deploy.s.sol with a keystore)")
     root = build_project(work, zkey)
     owner = _run([tools["cast"], "wallet", "address", "--private-key", key], "owner").strip()
     verifier = _create(tools, root, "src/verifiers/StateVerifier.sol:StateVerifier", rpc, key, [])
@@ -194,6 +202,8 @@ def _arr(xs) -> str:
 def settle_epoch(dep: Deployment, calldata: dict, key: str = ANVIL_DEV_KEY) -> dict:
     """Send settleEpoch; return the decoded StateSettled event (fail-closed)."""
     tools = discover()
+    if key.lower() == ANVIL_DEV_KEY and dep.chain_id not in DEV_CHAIN_IDS:
+        raise ChainError(f"refusing to sign for chain {dep.chain_id} with the public anvil dev key")
     out = _run([tools["cast"], "send", dep.engine, SETTLE_SIG, _arr(calldata["a"]),
                 _arr(calldata["b"]), _arr(calldata["c"]), _arr(calldata["pubSignals"]),
                 "--rpc-url", dep.rpc_url, "--private-key", key, "--json"], "settleEpoch")
