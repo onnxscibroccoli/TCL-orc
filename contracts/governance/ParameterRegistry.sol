@@ -23,6 +23,7 @@ contract ParameterRegistry {
     bytes32 public constant COST_CAP = keccak256("gamma_c");
     bytes32 public constant POOL_SHARE = keccak256("phi");
     bytes32 public constant EMISSION_RATE = keccak256("eta");
+    bytes32 public constant VOTE_HALF_LIFE = keccak256("t_half"); // conviction half-life (seconds)
 
     struct Param {
         uint256 value;
@@ -70,6 +71,7 @@ contract ParameterRegistry {
         _add(COST_CAP, 0.02e18, 0, 0.05e18, 0.005e18, 0);
         _add(POOL_SHARE, 0.2e18, 0, 0.5e18, 0.05e18, 0);
         _add(EMISSION_RATE, 0.05e18, 0.01e18, 0.25e18, 0.02e18, 0);
+        _add(VOTE_HALF_LIFE, 7 days, 3 days, 30 days, 0, 5_000);
     }
 
     function _add(bytes32 key, uint256 value, uint256 min, uint256 max, uint256 stepAbs, uint256 stepBps) private {

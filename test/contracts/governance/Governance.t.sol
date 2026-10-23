@@ -8,10 +8,11 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 import {CirculatoryEngine, IStateVerifier} from "../../../contracts/CirculatoryEngine.sol";
 import {ParameterRegistry} from "../../../contracts/governance/ParameterRegistry.sol";
 import {GovernanceTimelock} from "../../../contracts/governance/GovernanceTimelock.sol";
-import {ConvictionVoting, ITimelockScheduler} from "../../../contracts/governance/ConvictionVoting.sol";
+import {ConvictionVoting, ITimelockScheduler, IParamReader} from "../../../contracts/governance/ConvictionVoting.sol";
 import {TieredPersonhoodLimits} from "../../../contracts/governance/TieredPersonhoodLimits.sol";
 import {BountyModule, IEvidenceVerifier} from "../../../contracts/governance/BountyModule.sol";
 import {HandoffEngineOwnership} from "../../../script/HandoffEngineOwnership.s.sol";
+import {IPluralWeight} from "../../../contracts/governance/IPluralWeight.sol";
 import {MockSemaphorePersonhood, MockEvidenceVerifier} from "./Mocks.sol";
 
 contract AcceptAll is IStateVerifier {
@@ -38,7 +39,9 @@ contract GovernanceBase is Test {
         tl = new GovernanceTimelock(pd, ud, none, anyone, address(this));
         reg = new ParameterRegistry(address(tl), 14 days);
         ph = new MockSemaphorePersonhood();
-        cv = new ConvictionVoting(ph, ITimelockScheduler(address(tl)), 0.5e18);
+        cv = new ConvictionVoting(
+            ph, ITimelockScheduler(address(tl)), IParamReader(address(reg)), IPluralWeight(address(0)), 0.5e18
+        );
         tl.grantRole(tl.PROPOSER_ROLE(), address(cv));
         tl.grantRole(tl.CANCELLER_ROLE(), address(cv));
         tl.setRegistry(address(reg));
@@ -60,8 +63,12 @@ contract GovernanceBase is Test {
         ds[0] = d;
     }
 
+    function _for(uint256 id) internal view returns (uint256 y) {
+        (y,) = cv.convictionOf(id);
+    }
+
     function _vote(uint256 id, uint256 secret) internal {
-        cv.castVote(id, ph.nullifierOf(secret, id), abi.encode(secret));
+        cv.castVote(id, ph.nullifierOf(secret, id), abi.encode(secret), false);
     }
 }
 
@@ -77,7 +84,8 @@ contract ParameterRegistryTest is GovernanceBase {
         assertEq(reg.get(R), 0.0005e18);
         assertEq(reg.get(reg.HOARD_MULTIPLIER()), 9);
         assertEq(reg.get(reg.MINT_REWARD()), 0.002e18);
-        assertEq(reg.keys().length, 11);
+        assertEq(reg.keys().length, 12);
+        assertEq(reg.get(reg.VOTE_HALF_LIFE()), 7 days);
     }
 
     function test_onlyTimelock() public {
@@ -222,7 +230,7 @@ contract ConvictionVotingTest is GovernanceBase {
     }
 
     function test_alphaIsSevenDayHalfLife() public view {
-        uint256 h = cv.rpow(cv.ALPHA_PER_SECOND(), 7 days);
+        uint256 h = cv.decayFactor(7 days, cv.halfLife());
         assertApproxEqAbs(h, 0.5e18, 1e9);
     }
 
@@ -231,9 +239,9 @@ contract ConvictionVotingTest is GovernanceBase {
         for (uint256 i = 1; i <= N; ++i) {
             _vote(id, i);
         }
-        assertEq(cv.convictionOf(id), 0); // same block: zero
+        assertEq(_for(id), 0); // same block: zero
         vm.warp(block.timestamp + 12); // one block
-        uint256 y = cv.convictionOf(id);
+        uint256 y = _for(id);
         assertLt(y, 2e-4 * 1e18); // 10 persons * (1 - alpha^12) ~ 1.4e-4
         assertGt(y, 0);
         vm.expectRevert();
@@ -246,8 +254,9 @@ contract ConvictionVotingTest is GovernanceBase {
             _vote(id, i);
         }
         vm.warp(block.timestamp + 7 days);
-        assertApproxEqRel(cv.convictionOf(id), 5e18, 1e12); // half of steady state after one half-life
-        vm.expectRevert(); // exactly at threshold minus rounding => still below 0.5*N
+        assertApproxEqRel(_for(id), 5e18, 1e12); // half of steady state after one half-life
+        vm.warp(block.timestamp - 1 hours);
+        vm.expectRevert(); // just under one half-life => below 0.5*N
         cv.schedule(id, ts, vs, ds, 0);
         vm.warp(block.timestamp + 1 days);
         cv.schedule(id, ts, vs, ds, 0);
@@ -265,19 +274,19 @@ contract ConvictionVotingTest is GovernanceBase {
         _vote(id, 1);
         uint256 nf = ph.nullifierOf(1, id);
         vm.expectRevert(ConvictionVoting.NullifierUsed.selector);
-        cv.castVote(id, nf, abi.encode(uint256(1)));
+        cv.castVote(id, nf, abi.encode(uint256(1)), false);
         cv.withdrawVote(id, nf, abi.encode(uint256(1)));
         vm.expectRevert(ConvictionVoting.NullifierUsed.selector);
-        cv.castVote(id, nf, abi.encode(uint256(1)));
+        cv.castVote(id, nf, abi.encode(uint256(1)), false);
     }
 
     function test_invalidProofRejected() public {
         (uint256 id,,,) = _proposeRate(0.0006e18);
         uint256 nf = ph.nullifierOf(999, id);
         vm.expectRevert(ConvictionVoting.InvalidPersonhoodProof.selector);
-        cv.castVote(id, nf, abi.encode(uint256(999))); // not a member
+        cv.castVote(id, nf, abi.encode(uint256(999)), false); // not a member
         vm.expectRevert(ConvictionVoting.InvalidPersonhoodProof.selector);
-        cv.castVote(id, 12345, abi.encode(uint256(1))); // wrong nullifier
+        cv.castVote(id, 12345, abi.encode(uint256(1)), false); // wrong nullifier
     }
 
     function test_withdrawDecays() public {
@@ -285,9 +294,9 @@ contract ConvictionVotingTest is GovernanceBase {
         _vote(id, 1);
         vm.warp(block.timestamp + 70 days);
         cv.withdrawVote(id, ph.nullifierOf(1, id), abi.encode(uint256(1)));
-        uint256 y0 = cv.convictionOf(id);
+        uint256 y0 = _for(id);
         vm.warp(block.timestamp + 7 days);
-        assertApproxEqRel(cv.convictionOf(id), y0 / 2, 1e12);
+        assertApproxEqRel(_for(id), y0 / 2, 1e12);
     }
 
     function test_actionMismatchRejected() public {
@@ -364,7 +373,7 @@ contract BountyTest is Test {
     bytes32 constant OID = keccak256("prover-1");
 
     function setUp() public {
-        b = new BountyModule(TL, VAULT, 0.1 ether, 0.5 ether, 0.5e18);
+        b = new BountyModule(TL, VAULT, 0.1 ether, 0.5 ether, 0.5e18, 7 days);
         v = new MockEvidenceVerifier();
         vm.prank(TL);
         b.setVerifier(BountyModule.Offence.InvalidProof, v);
@@ -414,7 +423,7 @@ contract BountyTest is Test {
     /// Self-report (offender == reporter) never profits: R <= b_o.
     function testFuzz_selfReportNetNonPositive(uint96 bo, uint64 sigma, uint64 tau) public {
         sigma = uint64(bound(sigma, 1, 1e18 - 1));
-        BountyModule m = new BountyModule(TL, VAULT, 1, type(uint64).max, sigma);
+        BountyModule m = new BountyModule(TL, VAULT, 1, type(uint64).max, sigma, 1);
         vm.prank(TL);
         m.setRewardParams(sigma, tau);
         assertLe(m.rewardFor(bo), bo);

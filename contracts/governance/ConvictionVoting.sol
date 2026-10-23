@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import {IPersonhood} from "./IPersonhood.sol";
+import {IPluralWeight} from "./IPluralWeight.sol";
 
 interface ITimelockScheduler {
     function scheduleBatch(
@@ -13,46 +14,62 @@ interface ITimelockScheduler {
         uint256 delay
     ) external;
     function requiredDelay(address target, bytes calldata data) external view returns (uint256);
+    function paramDelay() external view returns (uint256);
+}
+
+interface IParamReader {
+    function get(bytes32 key) external view returns (uint256);
+    function VOTE_HALF_LIFE() external view returns (bytes32);
 }
 
 /// @title ConvictionVoting
-/// @notice One-anonymous-person-one-vote conviction voting (spec §10.6, decision 5).
-/// @dev Normalized update Y(t) = alpha*Y(t-1) + (1-alpha)*W*S(t), with per-second
-///      alpha = 2^(-1/604800) (7-day half-life). Over dt seconds with constant support S this is
-///      Y(t+dt) = alpha^dt * Y(t) + (1 - alpha^dt) * S. Because the update is linear and every
-///      person stakes exactly one unit (S in {0,1}, W = 1 until the plural-discount W_i lands), the
-///      aggregate conviction of a proposal is tracked lazily with the same formula.
-///      A brand-new vote contributes 0 in its own block and ~1.15e-6 per second after, so a flash
-///      vote cannot pass anything. Token balances confer no power.
-///      Identity: each vote is bound to the Semaphore nullifier H(15, personSecret, proposalId);
-///      a nullifier can be used to cast exactly once per proposal.
+/// @notice One-anonymous-person-one-vote conviction voting with for/against (spec §10.6, decision 5).
+/// @dev Normalized update Y(t) = a*Y(t-1) + (1-a)*W*S(t) with a = 2^(-1/t_half) per second, t_half read
+///      from ParameterRegistry (bounded there to [3d, 30d], default 7d). Over dt with constant S:
+///      Y(t+dt) = 2^(-dt/t_half)*Y(t) + (1 - 2^(-dt/t_half))*S. Tracked lazily per side; the half-life
+///      in force at each checkpoint applies to the whole elapsed interval.
+///      A new vote contributes 0 in its own block, so flash votes cannot pass anything.
+///      Pass rule: Y_for >= quorum*N and Y_for > m*(Y_for + Y_against) with m = 50%, or 66% for
+///      constitutional proposals (any call needing more than the parameter delay, e.g. UBI gate, upgrades).
 contract ConvictionVoting {
     uint256 public constant WAD = 1e18;
-    /// @notice 2^(-1/604800) in WAD: 7-day half-life per second.
-    uint256 public constant ALPHA_PER_SECOND = 999998853923969408;
+    uint256 public constant BPS = 10_000;
+    uint256 public constant SIMPLE_MAJORITY_BPS = 5_000;
+    uint256 public constant SUPERMAJORITY_BPS = 6_600;
+    uint256 private constant LN2_WAD = 693147180559945309;
 
     IPersonhood public immutable personhood;
     ITimelockScheduler public immutable timelock;
-    /// @notice Quorum as a WAD fraction of registered persons that must reach steady-state support.
+    IParamReader public immutable registry;
+    IPluralWeight public immutable pluralWeight; // address(0) => W = 1
     uint256 public immutable quorumWad;
 
     struct Proposal {
-        bytes32 actionHash; // keccak256(abi.encode(targets, values, payloads, salt))
-        uint256 support; // S_total: active supporters (persons)
-        uint256 conviction; // Y_total at lastUpdate, WAD-scaled persons
+        bytes32 actionHash;
+        uint256 supportFor; // sum of weights (WAD)
+        uint256 supportAgainst;
+        uint256 convFor; // WAD-scaled persons
+        uint256 convAgainst;
         uint64 lastUpdate;
+        bool constitutional;
         bool scheduled;
         bool exists;
     }
 
+    struct Vote {
+        uint8 state; // 0 none, 1 active, 2 withdrawn
+        bool against;
+        uint256 weight;
+    }
+
     mapping(uint256 => Proposal) public proposals;
-    mapping(uint256 => mapping(uint256 => uint8)) public voteState; // proposalId => nullifier => 0 none,1 active,2 withdrawn
+    mapping(uint256 => mapping(uint256 => Vote)) public votes;
     uint256 public proposalCount;
 
-    event Proposed(uint256 indexed id, bytes32 actionHash);
-    event VoteCast(uint256 indexed id, uint256 nullifierHash);
+    event Proposed(uint256 indexed id, bytes32 actionHash, bool constitutional);
+    event VoteCast(uint256 indexed id, uint256 nullifierHash, bool against, uint256 weight);
     event VoteWithdrawn(uint256 indexed id, uint256 nullifierHash);
-    event Scheduled(uint256 indexed id, uint256 conviction, uint256 threshold);
+    event Scheduled(uint256 indexed id, uint256 convFor, uint256 convAgainst, uint256 threshold);
 
     error ZeroAddress();
     error BadQuorum();
@@ -61,49 +78,74 @@ contract ConvictionVoting {
     error NotActiveVoter();
     error InvalidPersonhoodProof();
     error ThresholdNotMet(uint256 conviction, uint256 threshold);
+    error MajorityNotMet(uint256 convFor, uint256 convAgainst, uint256 requiredBps);
     error AlreadyScheduled();
     error ActionMismatch();
     error NoElectorate();
+    error EmptyProposal();
 
-    constructor(IPersonhood personhood_, ITimelockScheduler timelock_, uint256 quorumWad_) {
-        if (address(personhood_) == address(0) || address(timelock_) == address(0)) revert ZeroAddress();
+    constructor(
+        IPersonhood personhood_,
+        ITimelockScheduler timelock_,
+        IParamReader registry_,
+        IPluralWeight pluralWeight_,
+        uint256 quorumWad_
+    ) {
+        if (address(personhood_) == address(0) || address(timelock_) == address(0) || address(registry_) == address(0))
+        {
+            revert ZeroAddress();
+        }
         if (quorumWad_ == 0 || quorumWad_ > WAD) revert BadQuorum();
         personhood = personhood_;
         timelock = timelock_;
+        registry = registry_;
+        pluralWeight = pluralWeight_;
         quorumWad = quorumWad_;
     }
 
     // ------------------------------------------------------------------ math
 
-    /// @dev x^n in WAD fixed point (square-and-multiply, round-half-up).
-    function rpow(uint256 x, uint256 n) public pure returns (uint256 z) {
-        z = n % 2 != 0 ? x : WAD;
-        for (n /= 2; n != 0; n /= 2) {
-            x = (x * x + WAD / 2) / WAD;
-            if (n % 2 != 0) z = (z * x + WAD / 2) / WAD;
+    function halfLife() public view returns (uint256) {
+        return registry.get(registry.VOTE_HALF_LIFE());
+    }
+
+    /// @notice 2^(-dt/h) in WAD.
+    function decayFactor(uint256 dt, uint256 h) public pure returns (uint256) {
+        uint256 k = dt / h;
+        if (k >= 128) return 0;
+        uint256 y = (LN2_WAD * (dt % h)) / h; // in [0, ln2)
+        // exp(-y) by Taylor series; y < 0.7 so terms vanish quickly
+        uint256 sum = WAD;
+        uint256 term = WAD;
+        bool neg = true;
+        for (uint256 i = 1; i < 30 && term != 0; ++i) {
+            term = (term * y) / (i * WAD);
+            if (neg) sum -= term;
+            else sum += term;
+            neg = !neg;
         }
+        return sum >> k;
     }
 
-    function _decayed(Proposal storage p) internal view returns (uint256) {
+    function _decay(uint256 y, uint256 s, uint256 a) private pure returns (uint256) {
+        return (a * y + (WAD - a) * s) / WAD;
+    }
+
+    /// @return convFor, convAgainst at the current timestamp (WAD-scaled persons).
+    function convictionOf(uint256 id) public view returns (uint256, uint256) {
+        Proposal storage p = proposals[id];
+        if (!p.exists) revert UnknownProposal();
         uint256 dt = block.timestamp - p.lastUpdate;
-        if (dt == 0) return p.conviction;
-        uint256 a = rpow(ALPHA_PER_SECOND, dt);
-        return (a * p.conviction + (WAD - a) * p.support * WAD) / WAD;
+        if (dt == 0) return (p.convFor, p.convAgainst);
+        uint256 a = decayFactor(dt, halfLife());
+        return (_decay(p.convFor, p.supportFor, a), _decay(p.convAgainst, p.supportAgainst, a));
     }
 
-    function _checkpoint(Proposal storage p) internal {
-        p.conviction = _decayed(p);
+    function _checkpoint(uint256 id, Proposal storage p) private {
+        (p.convFor, p.convAgainst) = convictionOf(id);
         p.lastUpdate = uint64(block.timestamp);
     }
 
-    /// @notice Current aggregate conviction Y (WAD-scaled persons).
-    function convictionOf(uint256 id) public view returns (uint256) {
-        Proposal storage p = proposals[id];
-        if (!p.exists) revert UnknownProposal();
-        return _decayed(p);
-    }
-
-    /// @notice Conviction required: quorum share of the electorate at full steady state.
     function threshold() public view returns (uint256) {
         uint256 n = personhood.personCount();
         if (n == 0) revert NoElectorate();
@@ -120,44 +162,56 @@ contract ConvictionVoting {
         return keccak256(abi.encode(targets, values, payloads, salt));
     }
 
-    /// @notice Anyone may propose an action batch; it executes only via the timelock.
     function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata payloads, bytes32 salt)
         external
         returns (uint256 id)
     {
+        if (targets.length == 0) revert EmptyProposal();
         id = ++proposalCount;
         bytes32 h = hashAction(targets, values, payloads, salt);
-        proposals[id] = Proposal(h, 0, 0, uint64(block.timestamp), false, true);
-        emit Proposed(id, h);
+        bool constitutional = _maxDelay(targets, payloads) > timelock.paramDelay();
+        Proposal storage p = proposals[id];
+        p.actionHash = h;
+        p.lastUpdate = uint64(block.timestamp);
+        p.constitutional = constitutional;
+        p.exists = true;
+        emit Proposed(id, h, constitutional);
     }
 
-    /// @notice Cast one person's support. `nullifierHash` = H(15, personSecret, id); usable once.
-    function castVote(uint256 id, uint256 nullifierHash, bytes calldata proof) external {
+    /// @notice Cast one person's vote. `nullifierHash` = H(15, personSecret, id); usable once per proposal.
+    function castVote(uint256 id, uint256 nullifierHash, bytes calldata proof, bool against) external {
         Proposal storage p = proposals[id];
         if (!p.exists) revert UnknownProposal();
         if (p.scheduled) revert AlreadyScheduled();
-        if (voteState[id][nullifierHash] != 0) revert NullifierUsed();
-        if (!personhood.verifyPersonhood(nullifierHash, id, 1, proof)) revert InvalidPersonhoodProof();
-        _checkpoint(p);
-        voteState[id][nullifierHash] = 1;
-        p.support += 1;
-        emit VoteCast(id, nullifierHash);
+        Vote storage v = votes[id][nullifierHash];
+        if (v.state != 0) revert NullifierUsed();
+        if (!personhood.verifyPersonhood(nullifierHash, id, against ? 2 : 1, proof)) revert InvalidPersonhoodProof();
+        uint256 w = WAD;
+        if (address(pluralWeight) != address(0)) {
+            w = pluralWeight.weightOf(id, nullifierHash);
+            if (w > WAD) w = WAD;
+        }
+        _checkpoint(id, p);
+        (v.state, v.against, v.weight) = (1, against, w);
+        if (against) p.supportAgainst += w;
+        else p.supportFor += w;
+        emit VoteCast(id, nullifierHash, against, w);
     }
 
-    /// @notice Withdraw support (proof re-binds the same nullifier with signal 0). Cannot re-vote.
+    /// @notice Withdraw a vote (proof re-binds the same nullifier with signal 0). Cannot re-vote.
     function withdrawVote(uint256 id, uint256 nullifierHash, bytes calldata proof) external {
         Proposal storage p = proposals[id];
         if (!p.exists) revert UnknownProposal();
-        if (voteState[id][nullifierHash] != 1) revert NotActiveVoter();
+        Vote storage v = votes[id][nullifierHash];
+        if (v.state != 1) revert NotActiveVoter();
         if (!personhood.verifyPersonhood(nullifierHash, id, 0, proof)) revert InvalidPersonhoodProof();
-        _checkpoint(p);
-        voteState[id][nullifierHash] = 2;
-        p.support -= 1;
+        _checkpoint(id, p);
+        v.state = 2;
+        if (v.against) p.supportAgainst -= v.weight;
+        else p.supportFor -= v.weight;
         emit VoteWithdrawn(id, nullifierHash);
     }
 
-    /// @notice Once conviction crosses the threshold, hand the batch to the timelock with the
-    ///         strictest delay any call in it requires.
     function schedule(
         uint256 id,
         address[] calldata targets,
@@ -169,21 +223,23 @@ contract ConvictionVoting {
         if (!p.exists) revert UnknownProposal();
         if (p.scheduled) revert AlreadyScheduled();
         if (hashAction(targets, values, payloads, salt) != p.actionHash) revert ActionMismatch();
-        _requireThreshold(id, p);
+        _requirePassed(id, p);
         p.scheduled = true;
         uint256 delay = _maxDelay(targets, payloads);
         bytes32 tlSalt = keccak256(abi.encode(id, salt));
         timelock.scheduleBatch(targets, values, payloads, bytes32(0), tlSalt, delay);
     }
 
-    function _requireThreshold(uint256 id, Proposal storage p) internal {
-        uint256 y = _decayed(p);
+    function _requirePassed(uint256 id, Proposal storage p) private {
+        (uint256 yf, uint256 ya) = convictionOf(id);
         uint256 thr = threshold();
-        if (y < thr) revert ThresholdNotMet(y, thr);
-        emit Scheduled(id, y, thr);
+        if (yf < thr) revert ThresholdNotMet(yf, thr);
+        uint256 m = p.constitutional ? SUPERMAJORITY_BPS : SIMPLE_MAJORITY_BPS;
+        if (yf * BPS <= m * (yf + ya)) revert MajorityNotMet(yf, ya, m);
+        emit Scheduled(id, yf, ya, thr);
     }
 
-    function _maxDelay(address[] calldata targets, bytes[] calldata payloads) internal view returns (uint256 delay) {
+    function _maxDelay(address[] calldata targets, bytes[] calldata payloads) private view returns (uint256 delay) {
         for (uint256 i = 0; i < targets.length; ++i) {
             uint256 d = timelock.requiredDelay(targets[i], payloads[i]);
             if (d > delay) delay = d;
