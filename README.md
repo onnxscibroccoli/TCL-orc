@@ -191,7 +191,7 @@ The vault is the reserved account `__vault__`, stored at Merkle leaf index $0$.
 0 \le u \le V \quad\Longrightarrow\quad V \leftarrow V - u,\qquad B_a \leftarrow B_a' + u,
 ```
 
-otherwise the call is rejected. The code exposes single-recipient transfers only; the work-weighted allocation $`\mathrm{Alloc}_r = V \cdot W_r / \sum_j W_j`$ described in `docs/03_orchestration_redistribution.md` is **not implemented**.
+otherwise the call is rejected. The code exposes single-recipient transfers only; the work-weighted allocation $`\mathrm{Alloc}_q = V \cdot W_q / \sum_j W_j`$ described in `docs/03_orchestration_redistribution.md` is **not implemented**.
 
 ### 5. Conservation invariants
 
