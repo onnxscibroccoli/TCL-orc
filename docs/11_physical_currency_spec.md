@@ -397,67 +397,83 @@ Every change waits out a timelock of $`\ge 14`$ days (30 for upgrades), during w
 
 ### 10.5 Identity layer: anonymous proof-of-personhood
 
-Source: Gemini deep research (user-supplied, 2026-10-23), summarized at the time of writing. The research compares:
+Source: Gemini deep research (user-supplied, 2026-10-23). Equations in §10.5–§10.7 are quoted from that report. This draft cites the report only; several of the report's own references are low quality (for example Patreon links). Claims marked † still need primary sources.
 
-| System | Mechanism | Main weakness |
+| System | Mechanism | Main weakness (per report) |
 | --- | --- | --- |
-| Worldcoin / World ID | Orb iris scan plus Semaphore ZK | Biometric; hardware supply chain; regional bans |
+| Worldcoin / World ID | Orb iris scan plus Semaphore ZK | Biometric; hardware supply chain; regional bans† |
 | Encointer | Simultaneous in-person pseudonym parties | Liveness and attendance friction |
 | BrightID / Aura | Social-graph ranking (SybilRank) | Slow, long-con infiltration |
-| Proof of Humanity | Video, vouching, Kleros disputes | No privacy; deepfakes |
+| Proof of Humanity | Video, vouching, Kleros disputes | No privacy; deepfakes† |
 | Human Passport | Stamp aggregation | Wealth bias; stamps can be bought |
 
-The research proposes fusing ZK iris, ceremony and graph signals. **Iris biometrics conflict with the owner's anonymity and no-identity goal**, so this draft **recommends a non-biometric-first fusion**:
+The report proposes a fusion in which a credential requires all three of: a ZK iris attestation, an Encointer-style ceremony, and graph centrality $`C_{\mathrm{graph}}(i) \gt \theta`$. **Iris biometrics conflict with the owner's anonymity and no-identity goal**, so this draft **recommends a non-biometric-first fusion**:
 
 1. **Ceremony:** Encointer-style pseudonym parties.
-2. **Graph:** BrightID-style centrality above a threshold $`\theta_g`$.
-3. **ZK credential and MACI:** Semaphore-style nullifiers $`H(15, \mathsf{personSecret}, \cdot)`$ and MACI key rotation.
+2. **Graph:** BrightID-style centrality above $`\theta`$.
+3. **ZK and MACI:** Semaphore-style nullifiers $`H(15, \mathsf{personSecret}, \cdot)`$ and MACI key rotation.
 
-Biometrics are optional only, as an extra stamp a person may choose, and are never required. A credential is valid when its fused score passes a threshold (reconstructed from research summary):
+Biometrics are an optional extra signal, never a requirement:
 
 ```math
-s_i = w_c\,\mathbb{1}[\text{ceremony}] + w_g\,\mathbb{1}[\mathrm{centrality}_i \gt \theta_g] + w_b\,\mathbb{1}[\text{optional biometric}] \ge s^*, \qquad w_b \lt s^*.
+\mathrm{valid}_i = \mathbb{1}[\text{ceremony}_i] \wedge \mathbb{1}[C_{\mathrm{graph}}(i) \gt \theta] \quad (\text{optional biometric may lower } \theta \text{, never replace either term}).
 ```
 
-Because $`w_b \lt s^*`$, biometrics alone can never qualify a person. According to the research, Sybil cost grows super-linearly in the number $`k`$ of independent signals an attacker must fake. The hardware recommendations (multi-vendor sensors, remote attestation, governance revocation of manufacturer root keys) apply to the optional biometric path and to the note secure elements (§4.1).
+The report states Sybil cost $`C_{\mathrm{sybil}}(k) = \mathcal{O}(k^2)`$ in the number of fake identities $`k`$. **This is an assertion in the report, not a derivation**, and needs independent analysis†. The report's hardware advice (multi-vendor sensors, remote attestation, governance revocation of manufacturer root keys) applies to the optional biometric path and to note secure elements (§4.1).
 
 ### 10.6 Plural conviction voting
 
-This replaces plain QV in §10.2 as the Phase 2 target. All equations below are reconstructed from research summary. Support accumulates over time, so a flash loan or a single block cannot swing a vote:
+This is the Phase 2 target, replacing plain QV from §10.2. The report's update is
 
 ```math
-Y_p(t+1) = \alpha\,Y_p(t) + \sum_i W_i\,\sqrt{C_i}, \qquad \alpha = 2^{-1/\tau_{\mathrm{half}}},
+Y_{i,p}(t) = \alpha\,Y_{i,p}(t-1) + W_i\, S_{i,p}(t), \qquad \alpha = 2^{-1/\tau_{1/2}},
 ```
-
-where $`C_i`$ is the voice credit person $`i`$ stakes. $`W_i`$ is a correlation discount over the social graph, using the Jaccard similarity $`\sigma(i,j)`$ of neighborhoods, which reduces the weight of coordinated blocs ("Dark DAOs"):
 
 ```math
-W_i = \frac{1}{1 + \sum_{j \ne i} \sigma(i,j)}.
+\sigma(i,j) = \frac{|N(i) \cap N(j)|}{|N(i) \cup N(j)|}, \qquad W_i = \frac{1}{\sqrt{1 + \sum_{j \in V_p,\, j \ne i} \sigma(i,j)}},
 ```
 
-With $`\tau_{\mathrm{half}} = 10^6`$ blocks, one block contributes only about $`1-\alpha \approx 7\times10^{-7}`$ of the steady state. A proposal requesting share $`R`$ of the pool passes when (reconstructed from research summary)
+with the bribe-cluster limit
 
 ```math
-Y_p \ge Y^* = \frac{\beta_1\, T_{\mathrm{sup}}}{\big(1 - \beta_2\, R / T_{\mathrm{sup}}\big)^2},
+\lim_{\Sigma_p \to \mathbf{1}} W_i = \frac{1}{\sqrt{|V_{\mathrm{bribe}}|}}.
 ```
 
-where $`T_{\mathrm{sup}}`$ is the effective supply. Tokens never add weight; only persons do. Futarchy ("vote on values, bet on beliefs"), with a citizen veto, is deferred to Phase 3.
-
-### 10.7 UBI and demurrage interplay (proposal; implemented constants unchanged)
-
-The research suggests recycling demurrage as a universal basic income $`u`$ to verified persons. For a holder subject to decay (reconstructed from research summary):
+**Critical review: flash-loan bound.** The report claims a single-block injection yields $`Y_{\mathrm{flash}} = S_{\mathrm{flash}}(1 - 2^{-1/\tau_{1/2}}) \approx S_{\mathrm{flash}} \ln 2 / \tau_{1/2}`$, which is about $`10^{-6}`$ at $`\tau_{1/2} = 10^6`$ blocks. That bound **does not follow from the stated update**: with $`Y(t) = \alpha Y(t-1) + W S`$ and $`Y(t-1) = 0`$, one block already gives $`Y = W S`$, the full stake. The bound holds only for the normalized update, **which this spec adopts**:
 
 ```math
-\frac{dB}{dt} = u - \lambda B, \qquad B(t) = B_0 e^{-\lambda t} + \frac{u}{\lambda}\left(1 - e^{-\lambda t}\right), \qquad B_{ss} = \frac{u}{\lambda}.
+Y_{i,p}(t) = \alpha\,Y_{i,p}(t-1) + (1 - \alpha)\, W_i\, S_{i,p}(t) \ \Rightarrow\ Y_{\mathrm{flash}} = W_i S (1-\alpha), \quad Y_{ss} = W_i S.
 ```
 
-In TCL, decay applies only to the surplus above $`T`$, so this would apply to the surplus $`B - T`$. Here $`u`$ would be paid from the redistribution share $`(1-\phi)`$ of $`\mathcal{V}`$ (§9.1), per personhood credential. The research's PPP-targeting controller (reconstructed from research summary) is
+In TCL, $`S_{i,p}`$ is the voice credit staked by a **person**, not tokens, so flash loans already have no direct effect. The normalized form still limits sudden swings. Execution threshold for a request $`R_p`$ against treasury $`T_{\mathrm{tr}}`$ (written $`T`$ in the report; renamed here to avoid a clash with the demurrage threshold $`T`$):
 
 ```math
-MV = C^{*}T_x, \qquad \mu = \pi^{*} + \dot{T}_x - \dot{V}, \qquad N u = (\mu + \lambda) M \ \Rightarrow\ u = \frac{(\mu + \lambda) M}{N}.
+\sum_{i \in V_p} Y_{i,p}(t) \ge Y_p^*(R_p) = \frac{\beta_1\, T_{\mathrm{tr}}}{\left(1 - \beta_2 \frac{R_p}{T_{\mathrm{tr}}}\right)^2}, \qquad \beta_2 \in (0,1).
 ```
 
-This draft **does not change** the implemented constants $`r_d = 0.0005`$, $`T`$ or $`\lambda`$. The research's suggested rollout of about 1%/yr demurrage in Phase 1 and 5–10%/yr in Phase 2 is listed only as an open question. Any $`\mu \gt 0`$ (new issuance) would break the no-inflation rule of §9.2 and needs a populace decision.
+Futarchy ("vote on values, bet on beliefs"), with a citizen veto, is deferred to Phase 3.
+
+### 10.7 UBI and demurrage (optional governance-controlled extension)
+
+The report models balances with UBI $`u`$:
+
+```math
+\frac{dB_i}{dt} = -\lambda B_i + u(t), \qquad B_i(t) = B_i(0)e^{-\lambda t} + \frac{u}{\lambda}\left(1 - e^{-\lambda t}\right), \qquad B_{ss} = \frac{u}{\lambda},
+```
+
+and a PPP controller
+
+```math
+\mu(t) = (1 + \pi^{*e})(1 + \dot{T}^e) - 1, \qquad \frac{dM}{dt} = N u - \lambda M = \mu M \ \Rightarrow\ u = \frac{(\lambda + \mu) M}{N}.
+```
+
+**Critical review.** These formulas assume continuous new issuance, and that demurrage is destroyed ($`-\lambda M`$) and applies to the whole balance. TCL differs on all three:
+
+- Supply is fixed: fees move to $`\mathcal{V}`$ and are not destroyed, so $`\Delta M = 0`$ (§9.3).
+- Decay applies only to the surplus above $`T`$.
+- There is no issuance.
+
+So the PPP rule **conflicts with the current fixed-supply design** and is not adopted. UBI is presented only as an **optional extension that governance could enable**. If enabled, it would be paid from the redistribution share of $`\mathcal{V}`$ without issuance, $`N u \le (1-\phi)(F_e + \Pi_e)/\Delta t_e`$, per personhood credential. Implemented constants ($`r_d = 0.0005`$, $`T`$, $`\lambda`$) are unchanged. The report's suggested demurrage path (about 1%/yr, then 5–10%/yr) is an open question.
 
 ### 10.8 Rollout (from research, adapted)
 
@@ -499,7 +515,7 @@ This draft **does not change** the implemented constants $`r_d = 0.0005`$, $`T`$
 9. Default emission split and $`\phi`$: what are the sustainable values under realistic fee volume?
 10. Ceremony cadence and graph threshold $`\theta_g`$ for the non-biometric PoP fusion, and access for people without phones.
 11. Adopt UBI recycling (§10.7)? Should demurrage move toward the research's ~1%/yr then 5–10%/yr path (currently $`r_d = 0.0005`$/day, about 17%/yr on surplus)?
-12. Plural conviction parameters $`\tau_{\mathrm{half}}, \beta_1, \beta_2`$.
+12. Plural conviction parameters $`\tau_{1/2}, \beta_1, \beta_2`$; independent analysis of the $`\mathcal{O}(k^2)`$ Sybil-cost claim; primary sources for † claims.
 
 ---
 
@@ -511,6 +527,6 @@ This draft **does not change** the implemented constants $`r_d = 0.0005`$, $`T`$
 | Demurrage history on physical currency (Wörgl, Freigeld, Chiemgauer) | §5, §6 | Awaiting results |
 | Mint and mine incentive models (proof markets, bonding, slashing) | §7, §8, §9 | Awaiting results |
 | Hardware and manufacturing unit economics (NTAG 424 DNA, SE050, polymer, PUF) | §4.1, §7.2, §7.5 | Awaiting results |
-| Anonymous proof-of-personhood and anti-capture governance | §6.5, §10.5–§10.8 | **Received**: Gemini deep research (user-supplied, 2026-10-23); incorporated |
+| Anonymous proof-of-personhood and anti-capture governance | §6.5, §10.5–§10.8 | **Received**: Gemini deep research (user-supplied, 2026-10-23); incorporated, critically reviewed |
 
 Regulatory research is intentionally out of scope (R7).
