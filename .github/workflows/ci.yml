@@ -342,4 +342,4 @@ jobs:
           anvil --port 8599 --silent & sleep 2
           TCL_DB=/tmp/wd/t.db /tmp/w/bin/tcl chain deploy --rpc-url http://127.0.0.1:8599 \
             --committed-verifier --genesis-time 1 --build /tmp/wd/zk | tail -1 | python -c "import json,sys; assert json.load(sys.stdin)['chain_id']==31337"
-          /tmp/w/bin/tcl doctor -c chain --rpc
+          TCL_RPC_URL=http://127.0.0.1:8599 /tmp/w/bin/tcl doctor -c chain --rpc

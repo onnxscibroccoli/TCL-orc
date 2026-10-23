@@ -19,6 +19,8 @@ LICENSES = ["LICENSE", "lib/openzeppelin-contracts/LICENSE",
 class BuildWithData(build_py):
     def run(self):
         super().run()
+        if getattr(self, "editable_mode", False):
+            return  # editable installs resolve artifacts from the checkout itself
         dest = Path(self.build_lib) / "tcl" / "_data"
         shutil.rmtree(dest, ignore_errors=True)
         for tree, pat in TREES:
