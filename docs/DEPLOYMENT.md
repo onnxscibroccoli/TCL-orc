@@ -7,7 +7,7 @@
 ## 1. Prerequisites
 
 | Item | Who supplies it | Notes |
-|---|---|---|
+| --- | --- | --- |
 | RPC URL for the target chain | operator | `RPC_URL`; never commit it if it embeds an API key |
 | Funded deployer key | operator | import into a Foundry keystore: `cast wallet import deployer --interactive` (or use `--ledger`). Never put it in `.env`, the repo, or CI logs |
 | Explorer API key | operator | `ETHERSCAN_API_KEY` for `forge verify-contract` |
@@ -44,9 +44,11 @@ state roots. Before any non-dev deployment:
 2. Run a multi-party phase-2 ceremony on `StateTransition` (`snarkjs zkey contribute`, ≥ 3
    independent contributors, final random beacon), publish transcripts and hashes.
 3. Regenerate the verifier from the final zkey and commit it:
+
    ```bash
    python -c "from tcl.zk import export_verifier; export_verifier('circuit_final.zkey', 'contracts/verifiers/StateVerifier.sol')"
    ```
+
 4. Only then set `VERIFIER_CEREMONY_ATTESTED=true`.
 
 ## 3. Deploy
