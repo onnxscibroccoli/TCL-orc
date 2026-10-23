@@ -35,6 +35,7 @@ contract InvalidProofVerifier is IEvidenceVerifier {
         (uint256[2] memory pA, uint256[2][2] memory pB, uint256[2] memory pC, uint256[4] memory ps, bytes memory sig) =
             abi.decode(evidence, (uint256[2], uint256[2][2], uint256[2], uint256[4], bytes));
         bytes32 d = MessageHashUtils.toEthSignedMessageHash(submissionDigest(pA, pB, pC, ps));
+        // slither-disable-next-line unused-return (justified in docs/SECURITY.md)
         (address r, ECDSA.RecoverError e,) = ECDSA.tryRecover(d, sig);
         if (e != ECDSA.RecoverError.NoError || r != offender) return false;
         // Fail-closed: a reverting verifier call counts as "not proven invalid".

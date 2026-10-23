@@ -113,12 +113,14 @@ contract ConvictionVoting {
     function decayFactor(uint256 dt, uint256 h) public pure returns (uint256) {
         uint256 k = dt / h;
         if (k >= 128) return 0;
+        // slither-disable-next-line weak-prng (justified in docs/SECURITY.md)
         uint256 y = (LN2_WAD * (dt % h)) / h; // in [0, ln2)
         // exp(-y) by Taylor series; y < 0.7 so terms vanish quickly
         uint256 sum = WAD;
         uint256 term = WAD;
         bool neg = true;
         for (uint256 i = 1; i < 30 && term != 0; ++i) {
+            // slither-disable-next-line divide-before-multiply (justified in docs/SECURITY.md)
             term = (term * y) / (i * WAD);
             if (neg) sum -= term;
             else sum += term;
@@ -136,6 +138,7 @@ contract ConvictionVoting {
         Proposal storage p = proposals[id];
         if (!p.exists) revert UnknownProposal();
         uint256 dt = block.timestamp - p.lastUpdate;
+        // slither-disable-next-line incorrect-equality (justified in docs/SECURITY.md)
         if (dt == 0) return (p.convFor, p.convAgainst);
         uint256 a = decayFactor(dt, halfLife());
         return (_decay(p.convFor, p.supportFor, a), _decay(p.convAgainst, p.supportAgainst, a));

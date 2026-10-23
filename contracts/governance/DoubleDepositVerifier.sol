@@ -47,6 +47,7 @@ contract DoubleDepositVerifier is IEvidenceVerifier {
     }
 
     function _signedBy(bytes32 digest, bytes memory sig, address who) private pure returns (bool) {
+        // slither-disable-next-line unused-return (justified in docs/SECURITY.md)
         (address r, ECDSA.RecoverError e,) = ECDSA.tryRecover(MessageHashUtils.toEthSignedMessageHash(digest), sig);
         return e == ECDSA.RecoverError.NoError && r == who;
     }

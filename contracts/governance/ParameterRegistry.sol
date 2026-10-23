@@ -105,6 +105,7 @@ contract ParameterRegistry {
         if (!p.exists) revert UnknownParameter(key);
         if (newValue < p.min || newValue > p.max) revert OutOfBounds(key, newValue);
         uint256 cycle = currentCycle();
+        // slither-disable-next-line incorrect-equality (justified in docs/SECURITY.md)
         if (p.lastChangeCycle == cycle) revert AlreadyChangedThisCycle(key);
         uint256 old = p.value;
         uint256 diff = newValue > old ? newValue - old : old - newValue;

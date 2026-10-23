@@ -80,6 +80,7 @@ contract TieredPersonhoodLimits {
 
     function remaining(bytes32 pseudonym) public view returns (uint256) {
         Account storage a = accounts[pseudonym];
+        // slither-disable-next-line incorrect-equality (justified in docs/SECURITY.md)
         uint256 used = a.windowId == block.timestamp / window ? a.used : 0;
         uint256 lim = limitOf(pseudonym);
         return used >= lim ? 0 : lim - used;

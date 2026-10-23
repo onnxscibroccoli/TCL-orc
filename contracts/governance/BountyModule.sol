@@ -136,6 +136,7 @@ contract BountyModule {
     function withdrawBond(bytes32 offenderId) external {
         if (bondOwner[offenderId] != msg.sender) revert NotBondOwner();
         uint256 t = unbondAt[offenderId];
+        // slither-disable-next-line incorrect-equality (justified in docs/SECURITY.md)
         if (t == 0) revert NotUnbonding();
         if (block.timestamp < t) revert ChallengeWindowOpen(t);
         uint256 a = bonds[offenderId];

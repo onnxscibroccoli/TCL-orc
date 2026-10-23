@@ -64,6 +64,10 @@ Generated code (`contracts/verifiers/`), `lib/` and `test/` are filtered.
 | `timestamp` comparisons | Low | `CirculatoryEngine` | **Justified.** Decay is time-based by design; miner skew of seconds changes fees by `rate * skew * surplus`, negligible. Detector excluded. |
 | `low-level-calls` | Info | `withdraw` | **Justified.** Single ETH transfer, last statement, `nonReentrant`, result checked. |
 | `assembly`, `naming-convention`, `solc-version`, `missing-inheritance` | Info | verifier | Generated code. |
+| `weak-prng` `dt % h` | Medium (tool) | `ConvictionVoting.decayFactor` | **False positive.** Modulo splits elapsed time into whole half-lives and a remainder; no randomness is derived. Inline disable. |
+| `divide-before-multiply` | Medium (tool) | `ConvictionVoting.decayFactor` | **Justified.** WAD fixed-point Taylor series for `exp(-y)`; each term is rescaled by design, error < 1e-15 per term, covered by voting decay tests. Inline disable. |
+| `incorrect-equality` (`t == 0`, `dt == 0`, `lastChangeCycle == cycle`, `windowId == now/window`) | Medium (tool) | `BountyModule.withdrawBond`, `ConvictionVoting.convictionOf`, `ParameterRegistry.setParameter`, `TieredPersonhoodLimits.remaining` | **Justified.** Sentinel/counter/epoch-id comparisons, not balance checks; cannot be manipulated by sending tokens. Inline disable. |
+| `unused-return` `ECDSA.tryRecover` | Medium (tool) | `DoubleDepositVerifier._signedBy`, `InvalidProofVerifier.verify` | **Justified.** Only the third (error-argument) value is discarded; the recovered address and error code are both checked. Inline disable. |
 | `constable-states` | Optimization | `PhysicalMintController` | Left to the physical-note workstream (see below). |
 
 **Manual finding (High, not deployable):** `contracts/PhysicalMintController.sol` is a skeleton.
