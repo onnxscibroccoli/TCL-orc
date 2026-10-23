@@ -580,6 +580,62 @@ So the PPP rule **conflicts with the current fixed-supply design** and is not ad
 2. **Phase 2:** non-biometric PoP fusion, plural conviction voting, and governance as owner (Stage 2).
 3. **Phase 3:** immutable core (Stage 3), optional PPP controller and futarchy with citizen veto.
 
+### 10.9 Tiered personhood and Sybil unprofitability (owner-confirmed design)
+
+**Tiers.** A personhood credential at tier $`n`$ needs $`v_n`$ vouches, with $`v_1 = 3`$ and $`v_{n+1} \gt v_n`$, for example $`v = (3, 6, 12, 24)`$. Vouches only count when the vouchers are graph-independent. Each voucher's weight is the plural-discount weight from §10.6:
+
+```math
+\mathrm{eff}_n(i) = \sum_{j \in \mathrm{vouchers}(i)} W_j^{(i)} \ge v_n, \qquad W_j^{(i)} = \frac{1}{\sqrt{1 + \sum_{l \in \mathrm{vouchers}(i),\, l \ne j} \sigma(j,l)}} .
+```
+
+Each tier unlocks a per-window limit on transfers and deposits, under the person's pseudonym $`\nu`$ for window $`W_a`$:
+
+```math
+\sum_{\text{tx} \in W_a} \mathrm{amt}(\text{tx}) \le L_n, \qquad L_1 \lt L_2 \lt \cdots .
+```
+
+The base tier, $`L_1`$, covers everyday small transactions.
+
+**Funneling detection.** For a recipient pseudonym or cluster $`r`$ in window $`W_a`$, let $`f_{i \to r}`$ be the flow from sender $`i`$, and let $`\mathcal{L}`$ be the set of tier-1 senders. The share of tier-1 senders' outflow that goes to $`r`$ is
+
+```math
+c_r = \frac{\sum_{i \in \mathcal{L}} f_{i \to r}}{\sum_{i \in \mathcal{L}} \mathrm{out}_i}, \qquad m_r = \big|\{ i \in \mathcal{L} : f_{i \to r} \gt 0 \}\big| .
+```
+
+$`r`$ is flagged when $`m_r \ge m^*`$ and the flow from those senders is concentrated on it ($`c_r \ge c^*`$, and the senders send most of their outflow to $`r`$). Flagged flows count toward $`r`$'s own tier limit and its hoarding aggregate. They are summed under $`r`$'s pseudonym for $`L_{n(r)}`$, for $`T`$ in §2 and for $`\Theta`$ in §6:
+
+```math
+A_r \leftarrow A_r + \sum_{i \in \mathcal{L}} f_{i \to r} \cdot \mathbb{1}[\text{flagged}] .
+```
+
+Splitting funds across fake identities and funneling them back therefore gains nothing against the demurrage threshold or the re-entry rules.
+
+**Vouch bonds and honesty rewards.** Each vouch locks a bond $`B_v`$. If the vouchee is proven Sybil, through funneling evidence, ceremony failure or a dispute, every voucher of that identity loses $`B_v`$. That bond goes to the vault. A voucher whose vouchee stays in good standing earns $`r_v`$ per window from the incentive pool, capped by the pool share for vouch rewards.
+
+**Bounded damage.** In a single window, $`k`$ fake tier-1 identities can move at most
+
+```math
+D_{\max} = k \cdot L_1 .
+```
+
+That is all three colluding vouchers can extract per window, and funneling detection makes it count against the recipient anyway.
+
+**Unprofitability condition.** Write $`q \in [0,1]`$ for the fraction of $`L_1`$ an attacker can actually capture per window (UBI, threshold evasion or the like), $`w_d`$ for the expected number of windows before detection, $`c_{\mathrm{id}}`$ for the cost of creating one identity (ceremony attendance plus graph infiltration), and $`p_s`$ for the probability of being slashed. Each fake identity uses $`v_1 = 3`$ vouches. The expected gain is
+
+```math
+\mathbb{E}[G(k)] = k \Big( q\, L_1\, w_d - c_{\mathrm{id}} - p_s\, v_1 B_v \Big) \lt 0
+\iff
+B_v \gt \frac{q\, L_1\, w_d - c_{\mathrm{id}}}{p_s\, v_1} .
+```
+
+Because $`\mathbb{E}[G]`$ is linear in $`k`$, the same inequality makes every scale of attack unprofitable. Parameter choice: fix $`L_1`$ from everyday payment needs, then set $`B_v`$ above the bound using conservative values (for example $`q = 1`$, $`c_{\mathrm{id}} = 0`$). Honest vouching must still pay, so require
+
+```math
+r_v \cdot \mathbb{E}[\text{good-standing windows}] \gt (1 - p_{\mathrm{honest\ ok}})\, B_v ,
+```
+
+meaning an honest voucher's expected reward exceeds their expected loss from being deceived. Higher tiers raise the attack cost to $`v_n B_v`$ per identity, while the extractable value $`L_n`$ grows more slowly. This requires $`L_n / v_n`$ to be non-increasing in $`n`$.
+
 ---
 
 ## 11. Threat model
@@ -640,11 +696,7 @@ Y_{i,p}(t) = \alpha\,Y_{i,p}(t-1) + (1-\alpha)\,W_i\,S_{i,p}(t).
 
 Voting is one anonymous person, one vote via ZK personhood. Biometrics are optional.
 
-**6. Personhood.** A new person needs 3 vouches from existing trusted users. City kiosks act only as relays for cards the user builds; they never see the user's secret. **Known residual risk (recorded; the owner's choice stands):** 3 colluding vouchers can bootstrap Sybil identities. Mitigations:
-
-- re-attestation every 6 months;
-- voucher accountability, where a voucher's credential and vouching rights are slashed when a vouchee is proven Sybil;
-- plural discount $`W_i`$ (§10.6) on densely connected clusters.
+**6. Personhood (tiered).** The base tier needs 3 vouches from existing trusted users and carries a per-window limit $`L_1`$ for small transactions. Higher tiers need more graph-independent, plural-discounted vouches and unlock higher limits $`L_n`$. Funneling of low-tier flows toward one recipient is detected and aggregated under that recipient. Vouches are bonded: dishonest vouchers are slashed, and honest ones earn small rewards. City kiosks act only as relays for cards the user builds; they never see the user's secret. **Bounded damage:** $`k`$ colluding-vouched identities can move at most $`k \cdot L_1`$ per window, and $`B_v`$ is set so that Sybil creation has negative expected value. Re-attestation every 6 months still applies. See §10.9.
 
 ### 12.1 Research assessment (Gemini recommendations, for the record)
 
@@ -671,7 +723,7 @@ Source for every "Gemini rec" entry: Gemini deep research (user-supplied, 2026-1
 
 ## 13. Open questions (still unresolved)
 
-1. Formal derivation of Sybil-attack cost under pairwise/plural discounting and 3-voucher bootstrapping (Q12).
+1. Sybil-attack cost (Q12): addressed by the tiered design (§10.9); formal parameterization pending, covering $`L_n`$, $`v_n`$, $`B_v`$, $`r_v`$, $`c^*`$, $`m^*`$ and detection-rate estimates.
 2. Verification of the per-copy clone cost of an asymmetric-SE note against the 500 face-value cap (Q6).
 
 ## 14. Research received
