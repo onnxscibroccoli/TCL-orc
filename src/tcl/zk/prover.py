@@ -39,7 +39,7 @@ def circuits_dir() -> Path:
     """Circuit sources from the checkout or the wheel's bundled data (fail-closed)."""
     from ..resources import ResourcesMissing, resource_root
     try:
-        return resource_root() / "circuits"
+        return resource_root("zk") / "circuits"
     except ResourcesMissing as e:
         raise ToolchainMissing(str(e)) from e
 MAIN_TEMPLATE = "StateTransition"

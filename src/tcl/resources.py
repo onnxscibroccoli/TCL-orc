@@ -15,18 +15,20 @@ from pathlib import Path
 
 _PKG = Path(__file__).resolve().parent
 _CHECKOUT = _PKG.parents[1]
-REQUIRED = ("circuits/puf_verify.circom", "contracts/CirculatoryEngine.sol",
-            "contracts/verifiers/StateVerifier.sol",
-            "lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol",
-            "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol")
+REQUIRED = {
+    "zk": ("circuits/puf_verify.circom",),
+    "chain": ("contracts/CirculatoryEngine.sol", "contracts/verifiers/StateVerifier.sol",
+              "lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol",
+              "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol"),
+}
 
 
 class ResourcesMissing(RuntimeError):
     pass
 
 
-def _complete(root: Path) -> bool:
-    return all((root / r).is_file() for r in REQUIRED)
+def _complete(root: Path, kind: str) -> bool:
+    return all((root / r).is_file() for r in REQUIRED[kind])
 
 
 def candidates() -> list[Path]:
@@ -36,13 +38,15 @@ def candidates() -> list[Path]:
     return [_CHECKOUT, _PKG / "_data"]
 
 
-def resource_root() -> Path:
+def resource_root(kind: str = "chain") -> Path:
+    """Root holding the ``kind`` ("zk": circuits, "chain": contracts + OZ) artifacts."""
     for c in candidates():
-        if _complete(c):
+        if _complete(c, kind):
             return c
-    missing = {str(c): [r for r in REQUIRED if not (c / r).is_file()] for c in candidates()}
+    missing = {str(c): [r for r in REQUIRED[kind] if not (c / r).is_file()]
+               for c in candidates()}
     raise ResourcesMissing(
-        "TCL contract/circuit artifacts not found. Install a release wheel (bundles them), "
+        f"TCL {kind} artifacts not found. Install a release wheel (bundles them), "
         "run from a source checkout with `git submodule update --init`, or set "
         f"TCL_RESOURCE_ROOT. Missing: {missing}")
 

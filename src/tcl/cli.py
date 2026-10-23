@@ -291,12 +291,13 @@ def doctor(component: List[str] = typer.Option(
         check("config", True, f"rpc_url={c.rpc_url} db={c.db}")
     except Exception as e:  # noqa: BLE001
         check("config", False, f"{type(e).__name__}: {e}")
-    if "zk" in component or "chain" in component:
-        from .resources import ResourcesMissing, resource_root
-        try:
-            check("artifacts (circuits/contracts)", True, str(resource_root()))
-        except ResourcesMissing as e:
-            check("artifacts (circuits/contracts)", False, str(e))
+    from .resources import ResourcesMissing, resource_root
+    for kind, label in (("zk", "artifacts (circuits)"), ("chain", "artifacts (contracts)")):
+        if kind in component:
+            try:
+                check(label, True, str(resource_root(kind)))
+            except ResourcesMissing as e:
+                check(label, False, str(e))
     if "zk" in component:
         from .zk import Toolchain, ZkError
         try:

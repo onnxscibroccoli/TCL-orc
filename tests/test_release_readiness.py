@@ -21,14 +21,15 @@ def test_version_single_source_pep440():
 
 def test_resource_root_checkout():
     from tcl.resources import resource_root
-    assert (resource_root() / "contracts/CirculatoryEngine.sol").is_file()
+    assert (resource_root("zk") / "circuits/puf_verify.circom").is_file()
 
 
 def test_resource_root_override_fails_closed(tmp_path, monkeypatch):
     from tcl.resources import ResourcesMissing, resource_root
     monkeypatch.setenv("TCL_RESOURCE_ROOT", str(tmp_path))
-    with pytest.raises(ResourcesMissing, match="TCL_RESOURCE_ROOT"):
-        resource_root()
+    for kind in ("zk", "chain"):
+        with pytest.raises(ResourcesMissing, match="TCL_RESOURCE_ROOT"):
+            resource_root(kind)
     from tcl.zk.prover import ToolchainMissing, circuits_dir
     with pytest.raises(ToolchainMissing):
         circuits_dir()

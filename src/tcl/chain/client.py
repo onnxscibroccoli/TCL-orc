@@ -98,7 +98,7 @@ def build_project(work: Path, zkey: Optional[Path] = None) -> Path:
     from ..resources import ResourcesMissing, resource_root
     tools = discover()
     try:
-        REPO_ROOT = resource_root()
+        REPO_ROOT = resource_root("chain")
     except ResourcesMissing as e:
         raise ChainError(str(e)) from e
     work = Path(work)

@@ -332,9 +332,9 @@ jobs:
           cd /tmp
           /tmp/w/bin/tcl --help >/dev/null && /tmp/w/bin/tcl version
           /tmp/w/bin/tcl doctor -c core
-          /tmp/w/bin/python -c "import tcl.chain, tcl.zk, tcl.daemon; from tcl.resources import resource_root as r; p=r(); print(p); assert 'site-packages' in str(p)"
+          /tmp/w/bin/python -c "import tcl.chain, tcl.zk, tcl.daemon; from tcl.resources import resource_root as r; p=r('chain'); print(p, r('zk')); assert 'site-packages' in str(p)"
           /tmp/w/bin/tcl doctor -c chain --json | tee /tmp/doc.json || true
-          /tmp/w/bin/python -c "import json; c={x['check']:x for x in json.load(open('/tmp/doc.json'))['checks']}; assert c['artifacts (circuits/contracts)']['ok']"
+          /tmp/w/bin/python -c "import json; c={x['check']:x for x in json.load(open('/tmp/doc.json'))['checks']}; assert c['artifacts (contracts)']['ok']"
       - uses: foundry-rs/foundry-toolchain@v1
       - name: installed wheel deploys to anvil without a checkout
         run: |
