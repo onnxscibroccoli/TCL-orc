@@ -14,12 +14,18 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..crypto.poseidon import FIELD_P, poseidon
-from .prover import (CIRCUITS_DIR, Artifacts, Toolchain, ZkError, _run, dev_ptau,
+from .prover import (Artifacts, circuits_dir, Toolchain, ZkError, _run, dev_ptau,
                      groth16_setup, prove, verify, witness)
 
 DOMAIN_ID = 10
 DOMAIN_NF = 12
-NOTE_CIRCUIT = CIRCUITS_DIR / "note" / "note_deposit.circom"
+
+
+def note_circuit():
+    """Resolved lazily so installed wheels find bundled circuits (see tcl.resources)."""
+    return circuits_dir() / "note" / "note_deposit.circom"
+
+
 # snarkjs public-signal order (all public inputs, no outputs)
 PUBLIC_SIGNALS = ("id", "denom", "era", "ctx", "recipient", "nf")
 
@@ -89,7 +95,7 @@ def compile_note_circuit(out_dir: Path, tc: Optional[Toolchain] = None) -> Artif
     tc = tc or Toolchain.discover()
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    _run([tc.circom, NOTE_CIRCUIT, "--r1cs", "--wasm", "--O2", "-l", tc.circomlib,
+    _run([tc.circom, note_circuit(), "--r1cs", "--wasm", "--O2", "-l", tc.circomlib,
           "-o", out_dir], "note-compile")
     return Artifacts(0, out_dir, out_dir / "note_deposit.r1cs",
                      out_dir / "note_deposit_js" / "note_deposit.wasm")
