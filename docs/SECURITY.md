@@ -68,12 +68,14 @@ Generated code (`contracts/verifiers/`), `lib/` and `test/` are filtered.
 | `divide-before-multiply` | Medium (tool) | `ConvictionVoting.decayFactor` | **Justified.** WAD fixed-point Taylor series for `exp(-y)`; each term is rescaled by design, error < 1e-15 per term, covered by voting decay tests. Inline disable. |
 | `incorrect-equality` (`t == 0`, `dt == 0`, `lastChangeCycle == cycle`, `windowId == now/window`) | Medium (tool) | `BountyModule.withdrawBond`, `ConvictionVoting.convictionOf`, `ParameterRegistry.setParameter`, `TieredPersonhoodLimits.remaining` | **Justified.** Sentinel/counter/epoch-id comparisons, not balance checks; cannot be manipulated by sending tokens. Inline disable. |
 | `unused-return` `ECDSA.tryRecover` | Medium (tool) | `DoubleDepositVerifier._signedBy`, `InvalidProofVerifier.verify` | **Justified.** Only the third (error-argument) value is discarded; the recovered address and error code are both checked. Inline disable. |
-| `constable-states` | Optimization | `PhysicalMintController` | Left to the physical-note workstream (see below). |
+| `incorrect-equality` (`amt == 0`, `now/epochLength == currentEpoch`) | Medium (tool) | `NoteController._release`, `NoteController.quote` | **Justified.** Zero-amount no-op early return and epoch-id comparison; neither gates value on an externally inflatable balance. Inline disable. |
+| `constable-states` | Optimization | `PhysicalMintController` | **Resolved** — contract deleted (see below). |
 
-**Manual finding (High, not deployable):** `contracts/PhysicalMintController.sol` is a skeleton.
-`lockNote` has no access control or value transfer, and `redeemNote` accepts any proof (the check is commented out).
-It is not wired to `CirculatoryEngine` and holds no funds, but it **must not be deployed** until the physical-note contracts replace it.
-This pass does not edit it, to avoid conflicting with that workstream.
+**Manual finding (High) — RESOLVED:** `contracts/PhysicalMintController.sol` was a skeleton
+(`lockNote` had no access control or value transfer; `redeemNote` accepted any proof).
+It has been **deleted** in PR #11 and superseded by `contracts/physical/NoteController.sol`,
+which verifies Groth16 note-deposit proofs (`NoteDepositVerifier`), burns/mints against `CirculatoryEngine`,
+and is covered by the NoteController unit, fuzz and invariant tests and by the `slither` CI gate.
 
 ### Test inventory
 
@@ -121,7 +123,7 @@ Foundry is pinned to v1.8.6 in these jobs so gas numbers are reproducible.
 - [x] Dependencies audited and pinned (npm lockfile, Python lock, submodule commits)
 - [ ] Owner transferred to multisig + timelock; `setSettler` set to a dedicated key
 - [ ] Production trusted setup (Perpetual Powers of Tau + MPC phase 2); verifier regenerated from the final zkey
-- [ ] `PhysicalMintController` replaced or removed from the deploy set
+- [x] `PhysicalMintController` removed (superseded by `NoteController`)
 - [ ] Verify deployed bytecode against the tagged release; record proxy and implementation addresses
 - [ ] Confirm `initialize` was called atomically with proxy deployment (no front-run window)
 - [ ] External audit and a bug bounty

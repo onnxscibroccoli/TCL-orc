@@ -13,7 +13,7 @@ import {OffenderId} from "./OffenderId.sol";
 ///         (spec §4.4–§4.6: the era nullifier must be spent exactly once).
 contract DoubleDepositVerifier is IEvidenceVerifier {
     bytes32 public constant DOMAIN = keccak256("TCL-NOTE-DEPOSIT-v1");
-    /// @notice Contract that deposit authorizations are bound to (e.g. PhysicalMintController).
+    /// @notice Contract that deposit authorizations are bound to (e.g. NoteController).
     address public immutable depositContract;
 
     struct Auth {
