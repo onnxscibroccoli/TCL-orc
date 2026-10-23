@@ -1,0 +1,6 @@
+{
+  "filter_paths": "lib/|test/|contracts/verifiers/|node_modules/",
+  "detectors_to_exclude": "timestamp,naming-convention,solc-version,low-level-calls,assembly",
+  "exclude_dependencies": true,
+  "fail_on": "medium"
+}

@@ -201,3 +201,75 @@ jobs:
           python-version: "3.12"
       - run: pip install build && python -m build --wheel
       - run: pip install dist/*.whl && tcl --help && python -c "import tcl.chain, tcl.zk, tcl.daemon"
+
+  # ---------------------------------------------------------------- security
+  # Added by the deployment-readiness security pass (docs/SECURITY.md).
+  # All jobs are deterministic and fail closed.
+  slither:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # crytic-compile drives `forge build`, so forge's pinned solc 0.8.24 is used (no solc-select download).
+      - run: forge build
+      - run: pip install slither-analyzer==0.11.3
+      # slither.config.json: fails on medium+; excluded detectors justified in docs/SECURITY.md
+      - run: slither .
+
+  forge-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.6
+      - name: storage layout unchanged (upgrade safety)
+        run: python3 scripts/security/check_storage_layout.py
+      - name: high-run invariant + fuzz suite
+        env:
+          FOUNDRY_FUZZ_RUNS: "2048"
+          FOUNDRY_FUZZ_SEED: "0x7c1"
+          FOUNDRY_INVARIANT_DEPTH: "128"
+        run: forge test --match-path test/contracts/Security.t.sol -vv
+      - name: gas snapshot (2% tolerance)
+        run: forge snapshot --check --tolerance 2 --no-match-test "invariant|testFuzz"
+      - name: coverage gate (CirculatoryEngine lines >= 95%)
+        run: |
+          forge coverage --report summary --no-match-test invariant | tee cov.txt
+          python3 - <<'PY'
+          import re, sys
+          row = next(l for l in open("cov.txt") if "contracts/CirculatoryEngine.sol" in l)
+          pct = float(re.findall(r"([\d.]+)%", row)[0])
+          print("CirculatoryEngine line coverage", pct)
+          sys.exit(0 if pct >= 95.0 else 1)
+          PY
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: pip install pip-audit==2.7.3
+      - name: pip-audit over pinned requirements-test.lock
+        run: pip-audit -r requirements-test.lock --strict --no-deps --disable-pip
+      - name: npm audit (lockfile, high+)
+        run: npm audit --audit-level=high
+      - name: npm lockfile pinned
+        run: npm ci --ignore-scripts
+      - name: submodules pinned to commits
+        run: git ls-tree HEAD lib/ | awk '$2 != "commit" {print "unpinned:", $0; bad=1} END {exit bad}'
