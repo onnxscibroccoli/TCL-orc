@@ -1,7 +1,11 @@
 # 11 — Physical Currency, Minting, Mining and Governance Specification
 
+> **In plain words.** This is the full design for TCL cash. Notes pass hand to hand with no internet, like bills. They never shrink while they are paper. Anyone may make (*mint*) notes by turning digital TCL into them, and earns a small reward for it. When someone deposits a very large amount of notes at once, the excess above 5,000,000 TCL is unlocked slowly, and if it then sits unused it decays faster. That penalty goes to the shared vault. The design also covers voting rules where each real person gets one vote, not one vote per coin, so the rich cannot buy control. Most of this page is a **design, not built code**; see doc 12 for the small part that is built. Terms are in the [Glossary](GLOSSARY.md).
+>
+> **What this means for you:** if you use notes like normal cash, nothing here charges you. Only huge, idle piles brought back online are slowed down and charged.
+
 > [!WARNING]
-> **DRAFT — NOT IMPLEMENTED.** This document is a design specification under discussion. Nothing described here exists in `main`. Formulas, parameters and default values are proposals and will change after owner review of the research-driven decisions (see [§12](#12-decisions-owner-confirmed-2026-10-23)). Where this draft conflicts with code, the code is authoritative for what currently runs.
+> **DRAFT — MOSTLY NOT IMPLEMENTED.** This document is a design specification under discussion. Only a small testnet MVP of it exists in `main` (mint, deposit, re-arm and gradual unlock; see [`12_physical_notes_mvp.md`](12_physical_notes_mvp.md)). Everything else described here is not built. Formulas, parameters and default values are proposals and will change after owner review of the research-driven decisions (see [§12](#12-decisions-owner-confirmed-2026-10-23)). Where this draft conflicts with code, the code is authoritative for what currently runs.
 
 ## Contents
 
@@ -125,6 +129,8 @@ No holder identity is recorded anywhere, so holders stay anonymous (R1).
 
 ### 4.4 Re-entry (deposit) and the nullifier rule
 
+> **In plain words.** When you deposit a note, its chip switches it off (DORMANT) and the system marks that note's current one-time code as spent. The money lands in your account. The note itself is not destroyed: it can be switched back on later with a new code (a new *era*). So each era can be cashed in exactly once.
+
 A note re-enters the digital ledger when the bearer deposits it to address $`a`$. The SE signs a one-time redemption authorization and **atomically sets its internal state to DORMANT** and increments its counter. This means a deposited note visibly stops being spendable cash. The re-entry nullifier is
 
 ```math
@@ -207,6 +213,12 @@ The report then proposes a re-entry penalty based on how long the note was held:
 
 ## 6. Anti-hoarding at re-entry (hybrid design)
 
+> **In plain words.** If one person brings a very large amount back online within 30 days, only the part above 5,000,000 TCL is affected. That excess unlocks a little each day over 30 days, so nobody can dump a huge pile on the market at once. If the person then passes the money on, they pay only the normal rate. If they let it sit, it decays faster, up to 10 times the normal rate. Every penalty goes to the shared vault.
+>
+> **Example (default parameters).** You deposit notes worth 8,000,000 TCL in one month. The excess is 8,000,000 − 5,000,000 = 3,000,000 TCL. After 10 days, 5,000,000 + 3,000,000 × 10/30 = 6,000,000 TCL is unlocked. After 30 days it is all unlocked. If you spend none of the excess, after the 7-day grace period the extra decay ramps up: 45 days past grace, the rate is 1 + 9 × 45/90 = 5.5 times normal; after 90 days past grace it is 10 times normal. If you pass it all on, it stays at 1 times normal.
+>
+> **What this means for you:** deposits up to 5,000,000 TCL a month are never touched by these rules.
+
 ### 6.1 Re-entry bucket
 
 Re-entries are aggregated per **person** (see §6.5), not per address, over a rolling window $`W_a`$ (default 30 days). Let $`A`$ be the aggregated re-entered amount. Only the excess is affected:
@@ -285,6 +297,10 @@ Splitting a re-entry across many addresses would dodge $`\Theta`$. Mitigations:
 ---
 
 ## 7. Decentralized minting
+
+> **In plain words.** Anyone may make notes. You pay the note's face value in digital TCL. You get back a refund for what it cost to make the note, plus a small reward, both paid from a shared pool that is filled by decay fees. So making notes honestly earns a little money, but no new money is created.
+>
+> **Example (this spec's bounds).** A 100 TCL note, real cost 3 TCL, reward rate 1%: you pay 100 and get back 3 + 1 = 4, so you burn 96 net. This spec caps the cost refund at 5% of face value (5 TCL here). **Note:** the built MVP allows a cap of up to 20%; see "Unclear points" in the PR. If the epoch's budget is used up, you get 0 back (a straight 1:1 swap).
 
 ### 7.1 Mint event
 
@@ -399,6 +415,10 @@ Settlers get $`\gamma\,\mathcal{E}_e`$, split per accepted settlement. Optional 
 ---
 
 ## 9. Shared incentive pool, emission and conservation
+
+> **In plain words.** Decay fees and penalties go into the vault. Up to half of that can be moved into an *incentive pool* that pays minters, provers and settlers. Each epoch, a slice of the pool is paid out and split between those jobs. Rewards come only from fees, so no new money is ever printed.
+>
+> **Example (illustrative values within the bounds).** Fees this epoch: 1,000 TCL. With the pool share at 0.5, 500 TCL go to the pool and 500 stay in the vault. If the pool holds 10,000 TCL and the payout rate is 0.10, this epoch pays 1,000 TCL; with the default minting share of 0.35, minters share 350 TCL.
 
 ### 9.1 Funding
 
@@ -582,6 +602,10 @@ So the PPP rule **conflicts with the current fixed-supply design** and is not ad
 
 ### 10.9 Tiered personhood and Sybil unprofitability (owner-confirmed design)
 
+> **In plain words.** To prove you are a real person you need 3 other verified people to vouch for you. To move bigger amounts you need more vouches (for example 6, 12, 24). Each vouch locks up a deposit (a *bond*). If someone you vouched for turns out to be fake, you lose your bond. If they stay honest, you earn a small reward. The bond is set high enough that making fake people always loses money. **This layer is not built; personhood is a mock today.**
+>
+> **Example (illustrative numbers; the real values are still open).** Say a tier-1 person may move 1,000 TCL per window (L1), a fake survives 3 windows before being caught, making one costs nothing (worst case), and a fake is caught half the time. Then each vouch bond must be more than (1 × 1,000 × 3 − 0) ÷ (0.5 × 3) = 2,000 TCL.
+
 **Tiers.** A personhood credential at tier $`n`$ needs $`v_n`$ vouches, with $`v_1 = 3`$ and $`v_{n+1} \gt v_n`$, for example $`v = (3, 6, 12, 24)`$. Vouches only count when the vouchers are graph-independent. Each voucher's weight is the plural-discount weight from §10.6:
 
 ```math
@@ -637,6 +661,10 @@ r_v \cdot \mathbb{E}[\text{good-standing windows}] \gt (1 - p_{\mathrm{honest\ o
 meaning an honest voucher's expected reward exceeds their expected loss from being deceived. Higher tiers raise the attack cost to $`v_n B_v`$ per identity, while the extractable value $`L_n`$ grows more slowly. This requires $`L_n / v_n`$ to be non-increasing in $`n`$.
 
 ### 10.10 Incentivized reporting (fraud bounties) (owner-requested)
+
+> **In plain words.** Anyone who reports cheating, with proof the system can check, gets a reward paid from the cheater's forfeited bond. The reward is set so that reporting a bribe pays better than taking it. A false report costs the reporter their own bond. Reporting yourself never pays, because you lose more than you get.
+>
+> **Example (illustrative numbers).** The cheater's bond is 2,000 TCL, the reward share is 0.5 and the pool top-up is 100 TCL. The reward is min(0.5 × 2,000 + 100, 2,000) = 1,100 TCL. If a report is paid 90% of the time, a briber would have to offer more than 0.9 × 1,100 = 990 TCL to *every* person who holds the evidence. If the cheater reports themselves: 1,100 − 2,000 = −900 TCL, a loss.
 
 **Reportable offences.** A report must carry evidence that can be verified on chain, so the contract or a circuit can check it without trusting anyone:
 

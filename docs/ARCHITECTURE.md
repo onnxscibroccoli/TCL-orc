@@ -1,5 +1,9 @@
 # TCL Production Architecture
 
+> **In plain words.** This page explains how TCL is put together. It has five layers, each with one job: (1) a manager that runs work, (2) an account book, (3) a proof maker that shows the account book followed the rules, (4) blockchain programs (*smart contracts*) that check the proofs, and (5) the tools people use. Each layer is marked **Implemented** (built and tested), **Partial** (some of it built) or **Planned** (not built). Unfamiliar words are in the [Glossary](GLOSSARY.md).
+>
+> **What this means for you:** if a layer says Partial or Planned, do not rely on it. The proof setup is for development only, and nothing has had an outside security audit.
+
 This document describes the layered architecture of the Thresholded Circulatory Ledger (TCL).
 Each layer is marked **Implemented**, **Partial**, or **Planned**.
 A layer is only marked Implemented when it has passing tests in `tests/` or `ledger/`.

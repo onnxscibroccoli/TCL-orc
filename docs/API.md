@@ -1,5 +1,9 @@
 # TCL API Reference
 
+> **In plain words.** This is the reference list of every command and data format TCL offers. An *API* is the set of ways one program talks to another. A *CLI* is a program you control by typing commands. Every command prints its answer as *JSON*, a simple text format of labels and values like `{"balance": 10}`. If something goes wrong, the command stops with exit code 1 (a number meaning "failed") and does not guess. See the [Glossary](GLOSSARY.md) for other terms.
+>
+> **What this means for you:** look up the command you need here. You don't need to read it top to bottom.
+
 The console scripts `tcl` and `tcl-cli` are the same Typer app.
 All command output is JSON. Errors exit with code 1.
 

@@ -12,6 +12,8 @@ authors:
 
 # Multi-Agent Orchestration
 
+> **In plain words.** This is an early research note, kept for history. Where it disagrees with the code or with the [README white paper](../README.md#white-paper-the-mathematics-of-tcl), the code wins. Terms are in the [Glossary](GLOSSARY.md).
+
 The Thresholded Circulatory Ledger coordinates concurrent authoring and runtime operations through an isolated multi-agent worktree orchestrator.
 Each specialized agent is assigned a dedicated Git worktree channel that prevents write conflicts while sharing a single object store.
 The orchestrator maintains a directed acyclic graph of tasks whose nodes include frontmatter validation, architectural synthesis, mathematical formalization, tokenomic modeling, and quality-gate enforcement.

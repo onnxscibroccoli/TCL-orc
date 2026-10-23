@@ -1,5 +1,9 @@
 # TCL Security Model
 
+> **In plain words.** This page lists what could go wrong and what protects against it. TCL is still an experiment. **No outside expert has reviewed it (no audit).** The secret setup for its proofs was made by one developer, so whoever holds it could fake proofs; it is for testing only. The check that each person is one real human is a stand-in (*mock*). The owner of the contracts is a single key. Do not put real money into it. Terms are in the [Glossary](GLOSSARY.md).
+>
+> **What this means for you:** treat every TCL coin today as play money. The "Known limitations" section says exactly what must be fixed first.
+
 Status: the research and pre-production stage, with no external audit.
 Don't deploy to a network that holds real value.
 
