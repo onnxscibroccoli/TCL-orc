@@ -28,11 +28,20 @@ from ..ledger.demurrage_fixed import MAX_STEP_SECONDS
 from ..storage.db import VAULT
 from ..ledger.poseidon_tree import account_leaf, compute_root
 from ..utils.logger import get_logger
+from ..resources import checkout_root
 
 log = get_logger("tcl.zk")
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-CIRCUITS_DIR = REPO_ROOT / "circuits"
+REPO_ROOT = checkout_root()  # dev checkout (node_modules, fixtures); may not exist in a wheel
+
+
+def circuits_dir() -> Path:
+    """Circuit sources from the checkout or the wheel's bundled data (fail-closed)."""
+    from ..resources import ResourcesMissing, resource_root
+    try:
+        return resource_root() / "circuits"
+    except ResourcesMissing as e:
+        raise ToolchainMissing(str(e)) from e
 MAIN_TEMPLATE = "StateTransition"
 # order of snarkjs public signals: outputs first, then public inputs
 PUBLIC_SIGNALS = ("newRoot", "fee", "oldRoot", "newTime")
@@ -103,9 +112,9 @@ def compile_circuit(depth: int, out_dir: Path, tc: Optional[Toolchain] = None) -
     main = out_dir / f"{name}.circom"
     main.write_text(
         "pragma circom 2.1.6;\n"
-        f'include "{(CIRCUITS_DIR / "puf_verify.circom").as_posix()}";\n'
+        f'include "{(circuits_dir() / "puf_verify.circom").as_posix()}";\n'
         f"component main {{public [oldRoot, newTime]}} = {MAIN_TEMPLATE}({depth});\n")
-    _run([tc.circom, main, "--r1cs", "--wasm", "--O2", "-l", tc.circomlib, "-l", CIRCUITS_DIR,
+    _run([tc.circom, main, "--r1cs", "--wasm", "--O2", "-l", tc.circomlib, "-l", circuits_dir(),
           "-o", out_dir], "compile")
     return Artifacts(depth, out_dir, out_dir / f"{name}.r1cs",
                      out_dir / f"{name}_js" / f"{name}.wasm")

@@ -247,6 +247,100 @@ def daemon_health(sock: Optional[Path] = SOCK) -> None:
     typer.echo(json.dumps(_ipc(sock, {"op": "health"})))
 
 
+@daemon_app.command("ready")
+def daemon_ready(sock: Optional[Path] = SOCK) -> None:
+    """Readiness over IPC; exit 1 when not ready (fail-closed)."""
+    r = _ipc(sock, {"op": "ready"})
+    typer.echo(json.dumps(r))
+    if not r.get("ok"):
+        raise typer.Exit(1)
+
+
+# ------------------------------------------------------------------- doctor
+@app.command("version")
+def version() -> None:
+    """Print the installed tcl version."""
+    from . import __version__
+    typer.echo(__version__)
+
+
+@app.command("doctor")
+def doctor(component: List[str] = typer.Option(
+               ["core", "zk", "chain"], "--component", "-c",
+               help="core|zk|chain (repeatable); default: all"),
+           rpc: bool = typer.Option(False, "--rpc", help="also probe settings.rpc_url"),
+           as_json: bool = typer.Option(False, "--json")) -> None:
+    """Check toolchain + config. Exit 1 if any selected check fails (fail-closed)."""
+    import platform
+    import sys
+    from . import __version__
+    results: list[dict] = []
+
+    def check(name: str, ok: bool, detail: str = "", level: str = "error") -> None:
+        results.append({"check": name, "ok": bool(ok), "level": level, "detail": detail})
+
+    bad = set(component) - {"core", "zk", "chain"}
+    if bad:
+        _fail(f"unknown component(s): {sorted(bad)}")
+    c = None
+    check("python>=3.11", sys.version_info >= (3, 11), platform.python_version())
+    check("tcl version", True, __version__, level="info")
+    try:
+        from .config import get_settings
+        c = get_settings()
+        check("config", True, f"rpc_url={c.rpc_url} db={c.db}")
+    except Exception as e:  # noqa: BLE001
+        check("config", False, f"{type(e).__name__}: {e}")
+    if "zk" in component or "chain" in component:
+        from .resources import ResourcesMissing, resource_root
+        try:
+            check("artifacts (circuits/contracts)", True, str(resource_root()))
+        except ResourcesMissing as e:
+            check("artifacts (circuits/contracts)", False, str(e))
+    if "zk" in component:
+        from .zk import Toolchain, ZkError
+        try:
+            tc = Toolchain.discover()
+            check("zk toolchain (circom>=2.1, snarkjs, circomlib)", True,
+                  f"circom={tc.circom} snarkjs={tc.snarkjs} circomlib={tc.circomlib}")
+        except ZkError as e:
+            check("zk toolchain (circom>=2.1, snarkjs, circomlib)", False, str(e))
+    if "chain" in component:
+        from .chain import ChainError
+        from .chain.client import ANVIL_DEV_KEY, DEV_CHAIN_IDS, discover, wait_rpc
+        try:
+            tools = discover()
+            check("foundry (forge, cast, anvil)", True, " ".join(tools.values()))
+        except ChainError as e:
+            tools = None
+            check("foundry (forge, cast, anvil)", False, str(e))
+        dev_key = c is not None and c.chain_private_key.lower() == ANVIL_DEV_KEY
+        check("chain key", not dev_key or not rpc,
+              "public anvil dev key in use (local only); set TCL_CHAIN_PRIVATE_KEY or use a "
+              "forge keystore for real networks" if dev_key else "custom key configured",
+              level="warn" if dev_key and not rpc else "error")
+        if rpc and c is not None and tools:
+            try:
+                cid = wait_rpc(c.rpc_url, timeout=5, cast=tools["cast"])
+                check("rpc reachable", True, f"chain_id={cid}")
+                if dev_key and cid in DEV_CHAIN_IDS:
+                    results[-2].update(ok=True, level="warn")
+            except ChainError as e:
+                check("rpc reachable", False, str(e))
+    failed = [r for r in results if not r["ok"] and r["level"] == "error"]
+    if as_json:
+        typer.echo(json.dumps({"ok": not failed, "checks": results}))
+    else:
+        for r in results:
+            mark = "ok  " if r["ok"] and r["level"] != "warn" else (
+                "WARN" if r["level"] == "warn" else "FAIL")
+            typer.echo(f"[{mark}] {r['check']}: {r['detail']}")
+        typer.echo("doctor: " + ("all required checks passed" if not failed
+                                 else f"{len(failed)} check(s) failed"))
+    if failed:
+        raise typer.Exit(1)
+
+
 # ----------------------------------------------------------------------- zk
 BUILD = typer.Option(None, "--build", help="circuit build dir [settings.zk_build]")
 ZDEPTH = typer.Option(None, "--depth", help="circuit/tree depth [settings.zk_depth]")
