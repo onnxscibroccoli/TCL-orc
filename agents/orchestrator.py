@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Minimal multi-agent orchestrator skeleton for TCL."""
 import json
-from pathlib import Path
 
 PLAN = {
     "tasks": [

@@ -1,6 +1,6 @@
 {
-  "base_commit": "97ac489da71f8b302fd205478c8d0f13674092b3",
-  "branch": "feat/phase1b-poseidon",
+  "base_commit": "b911d586063facbccfe5bfccdb0339c692b59337",
+  "branch": "feat/phase3-zk-contracts",
   "artifacts": {
     "ledger/demurrage.py": "92506484c624fcee7aa8ff1b40e7be6108d1378cac5033834d45190579dd7202",
     "ledger/demurrage_fixed.py": "10ad8490b9ad72371787b43f59669d5e1e5a405c3c62df75697db66d49c25129",
@@ -32,22 +32,52 @@
     "tests/test_storage.py": "170103c371d8a2a09e45b408a2a565c6b85dcbd3c0559fac7f5643e979544d0b",
     "tests/test_state_machine.py": "732828ccb72fabd8141249a89dc2eff1740e5881822c359c069107d36d3a4eb3",
     "tests/test_worktree.py": "d6d5353d386fb34df1c4dedcfa857fb446c2fc98ee1aea909730c17ac8766c1d",
-    "tests/test_cli.py": "9229d0652bb55896f9c17e2337230fa7f3a6051c5dbc55c562564e0b76ece3f3",
-    "pyproject.toml": "8c95f026f74557babc91cd574e4770305498f5672e1bea71ea768ad941761bae",
-    "docs/ci/python-tests.yml": "3c4051f8f155c53c5caa84b6c85430293a6ac3db49b1d74cb2081ad9bc2948f4",
+    "tests/test_cli.py": "7d7a72390d9f54eb3eb0a6b5530518e2377b858d9378345b8fbc2ce1df360991",
+    "pyproject.toml": "4d09a322290d511ca5fb92b4b0960ec5d5d4dcbe4ed8d052b844e72a4d6abca7",
+    ".github/workflows/ci.yml": "048a502894f53a5b55246e4e76e1e34794a38cbc91520851ce9c8f011a5d489e",
     "ledger/test_demurrage.py": "caf0f59c0080cbf67855337a8c8139eb03ff49187dea34518f585b1763940233",
-    "ledger/test_demurrage_fixed.py": "ea3530cdc20e64e3268f0ac85d99e37a9f485916e2eec287d563340e9697c73d",
+    "ledger/test_demurrage_fixed.py": "428406796236e843e6a0c41aece4fc61eefd6d2016a19b661eb148f53aa81b32",
     "ledger/test_nullifiers.py": "7371eb192a10c4687695a9fa1cb8cdcabacb945e5c555ddf63c11f67c07a0791",
-    "contracts/CirculatoryEngine.sol": "32491ff212d01eeef8c5e03be074cb912765bd3b6285ed154d3b60df4e13f655",
+    "contracts/CirculatoryEngine.sol": "fdc389db19ea43da8d3f493ccbbbf7864117e7a07246794a68e62f45d87da86a",
     "contracts/PhysicalMintController.sol": "a8745c014e10cc5fdd56ac2822d0417ce8a242729fc430f858193271e8b7dedc",
-    "Containerfile": "b9042d256ece54d8ca25ee854c411aa54c72e41935348906b3addc8cd37bc1a8"
+    "Containerfile": "b9042d256ece54d8ca25ee854c411aa54c72e41935348906b3addc8cd37bc1a8",
+    "circuits/puf_verify.circom": "c9ed62a85b721efe67f1ee1cc8a6f7a837ef1615b1e5a6f49bd2bd475311410d",
+    "circuits/lib/merkle.circom": "4f595d10e1ed673ae863ef6ea7778a77e4ce5fe180b8277e8c6c6c80580ce4ea",
+    "circuits/lib/fixedpoint.circom": "c300620e06affb4a669e95463d5cc99c080b709cfea11186c9b9c5efad8430cb",
+    "circuits/main/state_transition_d4.circom": "3f4603f346f7a5161d856e98f38c46fdb3ce696f4a7fffa667327ba049886493",
+    "src/tcl/zk/prover.py": "6e0bf7c5771d69c4ce2c7922f25fdcf91ca082a0822154dd83a806c0d0056dd0",
+    "contracts/verifiers/StateVerifier.sol": "9d26391bbba7c16c3c62e105ceb34ca1fc4690e9fda8cbd6f84abdedce10d88b",
+    "test/contracts/CirculatoryEngine.t.sol": "0abedbf85054ba3718183a9290b258969f63e4bb61543a1cedbd637b7d7bd968",
+    "test/contracts/fixtures/state_transition.json": "b4295e53aafc842a17f78ef5afcfdd61c0fd500bd734564d3809f2b683ec8167",
+    "test/contracts/fixtures/verification_key.json": "0d1112355cdb9aa14678f306da2b9eb4198a274e4b525ef07bdcdb7450ee93ad",
+    "tests/test_zk_prover.py": "9ef7b934308ca73ce6942bc853965b528ef83cefdfb09850a02e23c2187b2248",
+    "tests/test_circuit_hygiene.py": "962d521342c39d3569e1672fb89cb77f84c7796949b1244b1eafe78d6378c8d0",
+    "scripts/gen_zk_fixture.py": "4f873c88820472ff8aeb7491b0d5bf5037dd6a61df019dd1954919a23d945c2e",
+    "foundry.toml": "29fa174beb26de5836096ff2cf165d3a5b55807e657619cfadd54b76fe293f62",
+    "package.json": "3f1485f0f97f1aa9e03f8fef965b9f36380ca43aa5fd201504a91ca453d3fe48",
+    "package-lock.json": "2b15108ce2935f12dea29dd0a7f095f21c7f6bb4e4edafe866f7cadef4556637"
   },
   "test_results": {
-    "suite": "pytest -q -p no:cacheprovider",
-    "passed": 93,
-    "failed": 0,
-    "acceptance_test_3": "tests/test_crash_recovery.py (1000 transitions, depth 20, SIGKILL mid-run + after) passed",
-    "container": "podman/docker unavailable on build box; validated via clean-venv non-editable install (pip install .)",
+    "pytest": {
+      "passed": 118,
+      "failed": 0,
+      "zk_required": true
+    },
+    "forge": {
+      "passed": 20,
+      "failed": 0
+    },
+    "circomspect": "clean (CS0005 allowed, hygiene-tested)",
+    "solhint": "0 warnings",
+    "ruff": "clean",
+    "toolchain": {
+      "circom": "2.1.9",
+      "snarkjs": "0.7.6",
+      "circomlib": "2.0.5",
+      "forge": "1.8.6",
+      "solc": "0.8.24",
+      "circomspect": "0.9.0"
+    },
     "python": "3.13.5"
   }
 }

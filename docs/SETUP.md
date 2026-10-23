@@ -58,3 +58,25 @@ Set `TCL_LOG_LEVEL=INFO` to get JSON log lines on stderr.
 ```bash
 TCL_TEST_RESULTS='{"passed": N, "failed": 0}' python3 scripts/record_provenance.py
 ```
+
+## ZK and contracts toolchain (Phase 3)
+
+Everything installs in user space, with no sudo needed:
+
+```bash
+# circom 2.1.9 (prebuilt)
+curl -sSfL -o ~/.local/bin/circom https://github.com/iden3/circom/releases/download/v2.1.9/circom-linux-amd64
+chmod +x ~/.local/bin/circom
+npm ci                                   # circomlib 2.0.5, snarkjs 0.7.6, solhint
+curl -L https://foundry.paradigm.xyz | bash && ~/.foundry/bin/foundryup
+cargo install --locked circomspect       # optional; needs rustc >= 1.88 for --locked deps
+git submodule update --init --recursive  # forge-std, OpenZeppelin v5.1.0
+```
+
+```bash
+TCL_REQUIRE_ZK=1 pytest -q tests/test_zk_prover.py    # Groth16 end-to-end, about 75 s
+forge test                                            # Solidity, including the real-proof suite
+circomspect -a CS0005 -L node_modules circuits/puf_verify.circom circuits/lib/*.circom
+npx solhint 'contracts/**/*.sol' --ignore-path .solhintignore --max-warnings 0
+python scripts/gen_zk_fixture.py   # regenerates StateVerifier.sol and the proof fixture together
+```
