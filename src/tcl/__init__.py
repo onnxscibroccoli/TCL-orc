@@ -1,2 +1,4 @@
 """Thresholded Circulatory Ledger (TCL)."""
-__version__ = "0.2.0"
+# Single source of truth for the package version (pyproject reads it via
+# [tool.setuptools.dynamic]); release tags must equal f"v{__version__}".
+__version__ = "0.1.0rc1"

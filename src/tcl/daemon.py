@@ -63,11 +63,32 @@ class Daemon:
                 "tasks": self.engine.status_map(), "worktrees": wts,
                 "alerts": [a.to_dict() for a in self.engine.alerts]}
 
+    def readiness(self) -> dict:
+        """Ready = IPC socket bound + accepting, engine started, not shutting down.
+        Fail-closed: any failed or erroring check -> not ready."""
+        checks: dict[str, bool] = {}
+        checks["not_stopping"] = not self._stop.is_set()
+        checks["ipc_bound"] = self._server is not None and self.socket_path.exists()
+        try:
+            checks["engine"] = any(t.is_alive() for t in self.engine._threads)
+            self.engine.status_map()
+        except Exception:  # noqa: BLE001 - any failure means not ready
+            checks["engine"] = False
+        try:
+            checks["worktrees"] = all(w["healthy"] for w in
+                                      (self.manager.health() if self.manager else []))
+        except Exception:  # noqa: BLE001
+            checks["worktrees"] = False
+        ready = all(checks.values())
+        return {"ok": ready, "status": "ready" if ready else "not_ready", "checks": checks}
+
     def handle(self, req: dict) -> dict:
         op = req.get("op")
         try:
             if op == "health":
                 return self.health()
+            if op == "ready":
+                return self.readiness()
             if op == "submit":
                 tasks = req.get("tasks") or ([req["task"]] if "task" in req else None)
                 if not isinstance(tasks, list):
@@ -123,16 +144,34 @@ class Daemon:
         return self
 
     def _start_http(self) -> None:
-        """Read-only HTTP endpoint: GET /health -> 200 (healthy) / 503 (degraded)."""
+        """Read-only HTTP endpoints.
+
+        GET /health, /healthz -> 200 healthy / 503 degraded (full status)
+        GET /livez            -> 200 while the process serves HTTP (liveness probe)
+        GET /readyz, /ready   -> 200 ready / 503 not ready (readiness probe)
+        GET /version          -> 200 {"version": ...}
+        """
+        from . import __version__
         daemon = self
 
         class HH(BaseHTTPRequestHandler):
             def do_GET(self) -> None:  # noqa: N802
-                if self.path.split("?")[0] not in ("/health", "/healthz"):
-                    code, body = 404, {"ok": False, "error": "not found"}
-                else:
-                    body = daemon.health()
-                    code = 200 if body["status"] == "healthy" else 503
+                path = self.path.split("?")[0]
+                try:
+                    if path in ("/health", "/healthz"):
+                        body = daemon.health()
+                        code = 200 if body["status"] == "healthy" else 503
+                    elif path == "/livez":
+                        code, body = 200, {"ok": True, "status": "alive"}
+                    elif path in ("/readyz", "/ready"):
+                        body = daemon.readiness()
+                        code = 200 if body["ok"] else 503
+                    elif path == "/version":
+                        code, body = 200, {"ok": True, "version": __version__}
+                    else:
+                        code, body = 404, {"ok": False, "error": "not found"}
+                except Exception as e:  # noqa: BLE001 - fail closed, never 200 on error
+                    code, body = 503, {"ok": False, "status": "error", "error": type(e).__name__}
                 data = json.dumps(body, default=str).encode()
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json")

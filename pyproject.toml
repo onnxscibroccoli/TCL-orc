@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tcl"
-version = "0.2.0"
+dynamic = ["version"]
 requires-python = ">=3.11"
 dependencies = ["typer>=0.12", "pydantic>=2.6", "pydantic-settings>=2.3", "pyyaml>=6"]
 
@@ -12,11 +12,14 @@ dependencies = ["typer>=0.12", "pydantic>=2.6", "pydantic-settings>=2.3", "pyyam
 tcl = "tcl.cli:app"
 tcl-cli = "tcl.cli:app"
 
+[tool.setuptools.dynamic]
+version = { attr = "tcl.__version__" }  # single source: src/tcl/__init__.py
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-tcl = ["py.typed", "crypto/*.json"]
+tcl = ["py.typed", "crypto/*.json"]  # + _data/** staged by setup.py build_py
 
 [tool.pytest.ini_options]
 testpaths = ["ledger", "tests", "test"]
