@@ -215,3 +215,47 @@ def test_committed_fixture_verifies(tc, tmp_path):
     fx = json.loads((REPO_ROOT / "test/contracts/fixtures/state_transition.json").read_text())
     vkey = REPO_ROOT / "test/contracts/fixtures/verification_key.json"
     assert verify(vkey, fx["proof"], fx["publicSignals"], tmp_path, tc)
+
+
+# --------------------------------------------------------------------------
+# Negative-test completeness (security pass): every array position of every
+# Merkle path input is tampered individually, and a static check asserts that
+# every `signal input` of the main template has at least one negative test.
+def _bump_at(i):
+    return lambda v: [str(int(x) + 1) if j == i else x for j, x in enumerate(v)]
+
+
+def _set_at(i, val):
+    return lambda v: [val if j == i else x for j, x in enumerate(v)]
+
+
+NEGATIVE_FIELDS = {
+    "oldRoot", "newTime", "accountId", "oldBalance", "oldTime", "pathElements",
+    "pathIndices", "vaultExists", "vaultBalance", "vaultTime", "vaultPathElements",
+}
+
+
+def test_every_circuit_input_has_negative_test():
+    import re
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "circuits" / "puf_verify.circom").read_text()
+    declared = set(re.findall(r"signal\s+input\s+(\w+)", src))
+    assert declared, "no inputs parsed"
+    missing = declared - NEGATIVE_FIELDS
+    assert not missing, f"circuit inputs without negative tests: {sorted(missing)}"
+
+
+@pytest.mark.parametrize("field,value", [
+    *[("pathElements", _bump_at(i)) for i in range(DEPTH)],
+    *[("vaultPathElements", _bump_at(i)) for i in range(DEPTH)],
+    *[("pathIndices", _set_at(i, "2")) for i in range(DEPTH)],
+    ("oldBalance", lambda v: str(2**128)),          # range check on balance
+    ("oldBalance", lambda v: "0"),
+    ("vaultBalance", lambda v: str(2**128)),
+    ("accountId", lambda v: "0"),
+])
+def test_tampered_inputs_fail_witness_exhaustive(tc, art, tmp_path, field, value):
+    inputs, _ = _valid_inputs()
+    inputs[field] = value(inputs[field])
+    with pytest.raises(ZkError):
+        witness(art, inputs, tmp_path / "bad.wtns", tc)

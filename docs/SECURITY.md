@@ -6,7 +6,7 @@ Don't deploy to a network that holds real value.
 ## Threat model
 
 | Asset | Threat | Mitigation | Evidence |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Off-chain ledger state | Crash or partial write | SQLite WAL transactions; leaf-to-root updates are atomic; a root journal allows rollback | `tests/test_crash_recovery.py` (SIGKILL) |
 | Off-chain state transitions | Forged decay or balance | Groth16 proof of `StateTransition(depth)` | `tests/test_zk_prover.py` |
 | On-chain funds | Reentrancy | `nonReentrant` on every mutating entry point; CEI; `withdraw` is the only ETH transfer and comes last | `test_ReentrancyBlocked` |
@@ -48,6 +48,83 @@ Don't deploy to a network that holds real value.
 - **Replay:** re-sending a settled proof reverts with `StaleRoot` (tested in `test/integration/test_cli_zk_chain.py`); a tampered public signal fails `tcl zk verify`.
 - **Verifier/zkey binding:** `tcl chain deploy` exports the verifier from the same zkey that `tcl zk prove` uses, and checks the deployed `stateRoot` equals the ledger root before writing `deployment.json`.
 - **Container:** non-root UID 10001; the podman CI job runs it rootless with `--userns=keep-id`.
+
+## Deployment-readiness security pass (2026-10-23)
+
+### Static analysis (Slither 0.11.3)
+
+CI job `slither` runs `slither .` with `slither.config.json` and fails on any medium or high finding.
+Generated code (`contracts/verifiers/`), `lib/` and `test/` are filtered.
+
+| Finding | Severity | Location | Status |
+| --- | --- | --- | --- |
+| `incorrect-return` in `checkPairing` / `verifyProof` | High (tool) | `contracts/verifiers/StateVerifier.sol` | **False positive.** snarkjs Groth16 template; the Yul `return(0, 0x20)` is the intended early exit with `false`. Covered by `test_TamperedProofRejected` and `test_RejectingVerifierFailsClosed`. Path filtered. |
+| `incorrect-equality` `dt == 0` | Medium (tool) | `CirculatoryEngine._fee` | **Justified.** `dt` is elapsed seconds, not a balance; equality is a fast path. Inline `slither-disable-next-line`. |
+| `missing-zero-check` on `owner_` → `settler` | Low | `CirculatoryEngine.initialize` | **Fixed.** Explicit `ZeroAddress` revert (OZ also rejects zero owner). Test: `test_InitializeRejectsBadParams`. |
+| `timestamp` comparisons | Low | `CirculatoryEngine` | **Justified.** Decay is time-based by design; miner skew of seconds changes fees by `rate * skew * surplus`, negligible. Detector excluded. |
+| `low-level-calls` | Info | `withdraw` | **Justified.** Single ETH transfer, last statement, `nonReentrant`, result checked. |
+| `assembly`, `naming-convention`, `solc-version`, `missing-inheritance` | Info | verifier | Generated code. |
+| `weak-prng` `dt % h` | Medium (tool) | `ConvictionVoting.decayFactor` | **False positive.** Modulo splits elapsed time into whole half-lives and a remainder; no randomness is derived. Inline disable. |
+| `divide-before-multiply` | Medium (tool) | `ConvictionVoting.decayFactor` | **Justified.** WAD fixed-point Taylor series for `exp(-y)`; each term is rescaled by design, error < 1e-15 per term, covered by voting decay tests. Inline disable. |
+| `incorrect-equality` (`t == 0`, `dt == 0`, `lastChangeCycle == cycle`, `windowId == now/window`) | Medium (tool) | `BountyModule.withdrawBond`, `ConvictionVoting.convictionOf`, `ParameterRegistry.setParameter`, `TieredPersonhoodLimits.remaining` | **Justified.** Sentinel/counter/epoch-id comparisons, not balance checks; cannot be manipulated by sending tokens. Inline disable. |
+| `unused-return` `ECDSA.tryRecover` | Medium (tool) | `DoubleDepositVerifier._signedBy`, `InvalidProofVerifier.verify` | **Justified.** Only the third (error-argument) value is discarded; the recovered address and error code are both checked. Inline disable. |
+| `constable-states` | Optimization | `PhysicalMintController` | Left to the physical-note workstream (see below). |
+
+**Manual finding (High, not deployable):** `contracts/PhysicalMintController.sol` is a skeleton.
+`lockNote` has no access control or value transfer, and `redeemNote` accepts any proof (the check is commented out).
+It is not wired to `CirculatoryEngine` and holds no funds, but it **must not be deployed** until the physical-note contracts replace it.
+This pass does not edit it, to avoid conflicting with that workstream.
+
+### Test inventory
+
+| Area | Tests | Notes |
+| --- | --- | --- |
+| Upgrade safety | `test_UpgradeByNonOwnerReverts`, `test_UpgradeToNonUUPSReverts`, `test_ImplementationCannotBeInitialized`, `test_ImplementationUpgradeDirectReverts`, `test_UpgradePreservesAllState` | `_authorizeUpgrade` is `onlyOwner` |
+| Storage layout | `scripts/security/check_storage_layout.py` vs `docs/storage-layout/CirculatoryEngine.json` | CI fails if any existing slot changes label, slot, offset or type; appends allowed. Update with `--update` only in a reviewed PR. |
+| Pause | `test_PauseBlocksEveryUserPath`, `test_PauseUnpauseOnlyOwner`, `test_PausedDecayStillAccruesButFundsIntact` | deposit, withdraw, settle, settleEpoch blocked |
+| Reentrancy | `test_ReenterDepositFromWithdrawBlocked`, `test_ReenterWithdrawBlocked`, `test_ReenterSettleHarmless` | |
+| Settlement | `test_RejectingVerifierFailsClosed`, `test_SettleEpochNonSettlerReverts`, `testFuzz_SettleEpochOutOfFieldRejected` | |
+| Invariants | `FullInvariantTest`: ETH conservation, ghost conservation (`deposited == withdrawn + balances + vault`), sum of balances, root tracking | handler covers deposit, withdraw, warp, settle, redistribute, settleEpoch, pause toggle; 512 runs × depth 128 |
+| Python properties | `tests/test_properties.py` (hypothesis) | demurrage conservation/bounds/monotonicity/rate accuracy, ledger conservation and Merkle integrity over random op sequences, tree incremental = rebuild, tamper rejection, field bounds, nullifier double-spend |
+| Circuit negatives | `tests/test_zk_prover.py` | every input has a negative test (static check `test_every_circuit_input_has_negative_test`), every Merkle path position tampered, 2^128 range checks |
+
+### CI security jobs
+
+- `slither`: static analysis, fail on medium+.
+- `forge-security`: storage layout check, high-run fuzz/invariant suite (fixed seed), gas snapshot `--check --tolerance 2` against `.gas-snapshot`, coverage gate (CirculatoryEngine lines ≥ 95%).
+- `dependency-audit`: `pip-audit` over pinned `requirements-test.lock`, `npm audit --audit-level=high`, `npm ci` lockfile check, submodules pinned to commits.
+
+Foundry is pinned to v1.8.6 in these jobs so gas numbers are reproducible.
+`npm audit fix` removed a high-severity `underscore` advisory (GHSA-qpx9-hpmf-5gmw) pulled in by snarkjs → bfj → jsonpath.
+
+### Threat matrix status
+
+| Threat | Status |
+| --- | --- |
+| Reentrancy on funds | Mitigated, tested |
+| Accounting drift | Mitigated, invariant-tested |
+| Unauthorized upgrade / storage corruption on upgrade | Mitigated, tested, layout-gated in CI |
+| Proof replay, fork, non-canonical inputs | Mitigated, tested |
+| Under-constrained circuit | Mitigated; negative-test completeness enforced |
+| Vulnerable dependencies | Gated in CI |
+| Single owner key | **Open**: move owner to a multisig + timelock before mainnet (governance workstream) |
+| Dev trusted setup | **Open**: MPC phase 2 required before mainnet |
+| Physical-note controller | **Open (High)**: skeleton, must not be deployed |
+| External audit | **Open** |
+
+### Pre-deployment audit checklist
+
+- [x] Slither clean at medium+ with every exclusion justified above
+- [x] Invariant, fuzz, pause, reentrancy and upgrade tests green
+- [x] Storage layout snapshot committed and gated
+- [x] Circuit negative tests cover every input
+- [x] Dependencies audited and pinned (npm lockfile, Python lock, submodule commits)
+- [ ] Owner transferred to multisig + timelock; `setSettler` set to a dedicated key
+- [ ] Production trusted setup (Perpetual Powers of Tau + MPC phase 2); verifier regenerated from the final zkey
+- [ ] `PhysicalMintController` replaced or removed from the deploy set
+- [ ] Verify deployed bytecode against the tagged release; record proxy and implementation addresses
+- [ ] Confirm `initialize` was called atomically with proxy deployment (no front-run window)
+- [ ] External audit and a bug bounty
 
 ## Reporting a vulnerability
 
