@@ -1,16 +1,11 @@
-"""Minimal nullifier set for replay protection.
-Uniqueness is enforced by field element, not by proof bytes.
-"""
-from __future__ import annotations
+"""Backwards-compatible shim: moved to tcl.ledger.nullifiers."""
+import sys as _sys
+from pathlib import Path as _P
 
-class NullifierSet:
-    def __init__(self) -> None:
-        self._spent: set[int] = set()
+_src = str(_P(__file__).resolve().parent.parent / "src")
+if _src not in _sys.path:
+    _sys.path.insert(0, _src)
+from tcl.ledger.nullifiers import *  # noqa: F401,F403,E402
+from tcl.ledger import nullifiers as _m  # noqa: E402
 
-    def is_spent(self, nullifier: int) -> bool:
-        return nullifier in self._spent
-
-    def mark_spent(self, nullifier: int) -> None:
-        if nullifier in self._spent:
-            raise ValueError("nullifier already spent")
-        self._spent.add(nullifier)
+globals().update({k: v for k, v in vars(_m).items() if not k.startswith("__")})
