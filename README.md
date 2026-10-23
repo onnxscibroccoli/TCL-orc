@@ -23,7 +23,7 @@ Worktree orchestration framework for the Thresholded Circulatory Ledger (TCL): m
   - [11. On-chain lazy O(1) decay](#11-on-chain-lazy-o1-decay)
   - [12. Epoch settlement and StaleRoot](#12-epoch-settlement-and-staleroot)
   - [13. Off-chain vs on-chain: what differs, what is proven](#13-off-chain-vs-on-chain-what-differs-what-is-proven)
-- [Physical currency (draft, under specification)](#physical-currency-draft-under-specification)
+- [Physical currency (MVP, testnet only)](#physical-currency-mvp-testnet-only)
 - [Documentation](#documentation)
 - [License](#license)
 
@@ -466,6 +466,8 @@ What exists today:
 - The earlier `PhysicalMintController.sol` skeleton has been removed.
 - The file name `circuits/puf_verify.circom` is historical. It holds the ledger `StateTransition` circuit and has nothing to do with PUFs.
 
+Full design (circulation, minting incentives, governance): [`docs/11_physical_currency_spec.md`](docs/11_physical_currency_spec.md) (draft; only the MVP above is implemented).
+
 Known gaps: chip hardware is simulated, minting does not verify that a physical note exists, the hoarding threshold is per address rather than per person, and admin roles are not yet handed to governance.
 
 ## Documentation
@@ -476,6 +478,7 @@ Known gaps: chip hardware is simulated, minting does not verify that a physical 
 | [`docs/SETUP.md`](docs/SETUP.md) | Developer onboarding |
 | [`docs/API.md`](docs/API.md) | CLI, JSON payloads, contract ABI |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, circuit guarantees, limitations |
+| [`docs/11_physical_currency_spec.md`](docs/11_physical_currency_spec.md) | Physical currency specification (draft) |
 | `docs/00_whitepaper.md`, `docs/03_*`–`06_*` | Earlier research prose (not authoritative where it differs from code) |
 
 ## License
