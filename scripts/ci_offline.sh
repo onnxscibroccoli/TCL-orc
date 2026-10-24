@@ -42,10 +42,17 @@ if [ -d src/tcl/localnet ]; then
   trap 'tcl localnet stop --data-dir "$D" || true' EXIT
   tcl localnet mine 3 --data-dir "$D"
   tcl localnet time advance 86400 --data-dir "$D"
-  snap="$(tcl localnet snapshot --data-dir "$D" | tail -1)"
+  snap="$(tcl localnet snapshot --data-dir "$D" | tail -1 | tr -d '"')"
   tcl localnet mine 2 --data-dir "$D"
   tcl localnet revert "$snap" --data-dir "$D"
-  tcl localnet status --data-dir "$D"
+  tcl localnet status --data-dir "$D" | tee "$D.status.json"
+  python - "$D.status.json" "$snap" <<'PY'
+import json, sys
+st = json.load(open(sys.argv[1]))
+want = int(sys.argv[2].split("-")[0])
+assert st["height"] == want, (st["height"], want)
+print(f"  revert restored height {want} - good")
+PY
 else
   echo "== src/tcl/localnet not on this branch yet (PR #15); localnet smoke skipped"
 fi

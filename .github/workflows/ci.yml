@@ -78,7 +78,37 @@ jobs:
       - name: Groth16 prover tests (fail-closed)
         env:
           TCL_REQUIRE_ZK: "1"
-        run: pytest -q tests/test_zk_prover.py tests/test_circuit_hygiene.py
+        run: pytest -q tests/test_zk_prover.py tests/test_circuit_hygiene.py tests/test_tcl_circuit_lib.py
+
+  offline:
+    # Fully offline testnet: install ONLY from vendor/ (sha256 store) and run the suite +
+    # localnet smoke inside a network namespace with loopback only (docs/OFFLINE.md).
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: bundle verify (fail closed on any hash mismatch)
+        run: python scripts/bundle_verify.py
+      - name: install + tests + localnet with networking disabled (unshare -n)
+        run: |
+          PY="$(command -v python)"
+          sudo unshare --net bash -c "ip link set lo up && exec sudo -u $(id -un) env PATH='$PATH' HOME='$HOME' PYTHON='$PY' ./scripts/ci_offline.sh"
+
+  no-ethereum:
+    # Sovereign paths (consensus, localnet, node, offline tooling) must not use Ethereum/EVM.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/check_no_ethereum.py
+      - run: python scripts/gen_poseidon_constants.py --check
 
   contracts:
     runs-on: ubuntu-latest
