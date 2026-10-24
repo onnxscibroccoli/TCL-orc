@@ -24,6 +24,8 @@
 13. [Open questions (still unresolved)](#13-open-questions-still-unresolved)
 14. [Research received](#14-research-received)
 
+Appendix A. [Rejected alternatives and why](#appendix-a-rejected-alternatives-and-why)
+
 ---
 
 ## 1. Scope and design goals
@@ -420,14 +422,34 @@ C_d = \min\big(\hat c,\ c^{\max}_d,\ \tilde c_d\big), \qquad
 Here:
 
 - $`\tilde c_d`$ is the *median* (middle value) of the last $`K`$ stated costs for this denomination, plus a 5% margin. Defaults: $`K = 256`$, $`\epsilon = 0.05`$. "Rolling" means it always uses the most recent $`K`$.
-- $`c^{\max}_d = \gamma_c V_d`$ is a hard cap that governance sets within limits ($`\gamma_c \in [0, 0.05]`$, so at most 5% of face value).
+- $`c^{\max}_d`$ is a hard cap per denomination. See the recommended rule below.
 
 Why this works: minters compete. Claiming too much can't push your refund above the median. Honest minters with low costs keep the difference as extra profit.
 
 Re-arming an existing note (Option A) gets $`C_d = 0`$, because no new hardware is made.
 
 > [!IMPORTANT]
-> **Open discrepancy (owner deciding).** This spec caps the cost credit at 5% of face value ($`\gamma_c \le 0.05`$, and §7.6 also adds a 5 TCL cap). The built MVP contract (`NoteController`, `MAX_COST_BPS = 2000`) allows a cap of up to **20%**. One of the two must change.
+> **Recommendation pending Ian (contract not changed).** The spec used to say a flat 5% of face value. `NoteController` allows up to 20% (`MAX_COST_BPS = 2000`). Recommended synthesis: a percentage cap *and* a fixed TCL cap, whichever is lower. Details in [Appendix A.4](#a4-cost-credit-cap-5-vs-20).
+
+**Recommended cap rule (pending Ian).** A chip costs about the same whether it goes in a 5 note or a 500 note. So a pure percentage cap is wrong at both ends. 5% of a 5 TCL note is only 0.25 TCL, too little to pay for the note, so nobody would make small notes. 20% of a 500 TCL note is 100 TCL, far too much, and it invites over-claiming. Use the lower of the two:
+
+```math
+c^{\max}_d = \min\bigl(\gamma_c \cdot V_d,\ c_{\mathrm{abs}}\bigr), \qquad \gamma_c \le 0.20,\quad c_{\mathrm{abs}} = 5\ \mathrm{TCL}.
+```
+
+where $`\gamma_c`$ is the percentage limit (the contract's hard ceiling is 20%) and $`c_{\mathrm{abs}}`$ is the fixed cap in TCL (from §7.6).
+
+| Note | 20% of face | Fixed cap | Credit cap | As % of face |
+| --- | --- | --- | --- | --- |
+| 5 | 1 | 5 | **1** | 20% |
+| 10 | 2 | 5 | **2** | 20% |
+| 20 | 4 | 5 | **4** | 20% |
+| 50 | 10 | 5 | **5** | 10% |
+| 100 | 20 | 5 | **5** | 5% |
+| 200 | 40 | 5 | **5** | 2.5% |
+| 500 | 100 | 5 | **5** | 1% |
+
+The median rule above still applies on top, so an honest cost below the cap is what actually gets paid.
 
 **Example.** Minting a 100 TCL note. You claim a cost of 4 TCL. Recent minters' median is 3 TCL, so $`\tilde c_d = 3 \times 1.05 = 3.15`$. The cap at 5% is 5 TCL. Your credit is the smallest: 3.15 TCL.
 
@@ -495,7 +517,7 @@ with $`C_{\mathrm{base}} = 1.50`$, $`C_{\mathrm{cap}} = 5.00`$, $`\mu_{\max} = 0
 R_d = \min\!\Big(V_d\,\rho_{\max}\max\!\big(0,\ 1 - \tfrac{P}{p^{*}M}\big),\ \tfrac{\alpha\mathcal{E}_e}{\max(1,n_e)}\Big), \quad \rho_{\max} = 0.01,\ p^{*} = 0.2 \ (\text{proposed}).
 ```
 
-- **Cost cap:** set $`c^{\max}_d = \min(\gamma_c V_d,\ 5\ \text{TCL})`$. (See the open discrepancy with the MVP's 20% cap in §7.2.)
+- **Cost cap:** set $`c^{\max}_d = \min(\gamma_c V_d,\ 5\ \text{TCL})`$. Adopted in §7.2, with $`\gamma_c`$ up to 0.20 (recommendation pending Ian).
 
 **Part D (hardware).** The proposed note is made of plastic film (*BOPP polymer*, like some modern banknotes). It has shiny color-shifting patches (*OVD*), inks that glow under ultraviolet (UV) and infrared (IR) light, an optical PUF layer, and a built-in chip that talks to phones by tap (*NFC SE*). Its silver antenna lines break if someone peels the layers apart (*delamination*). The report says a note lasts 8–10 years † and gives cost per note:
 
@@ -568,7 +590,7 @@ I_{e+1} = I_e + \phi\,(F_e + \Pi_e) - \mathcal{E}_e^{\mathrm{paid}}, \qquad \mat
 \mathcal{E}_e = \eta\, I_e, \quad \eta \in [0.01, 0.25]; \qquad \alpha + \beta + \gamma + \delta = 1,
 ```
 
-Each epoch, the pool pays out a fraction $`\eta`$ of what it holds (between 1% and 25%). That payout is split four ways: $`\alpha`$ to minters, $`\beta`$ to provers, $`\gamma`$ to settlers and $`\delta`$ to proof-of-work. The defaults are $`(\alpha, \beta, \gamma, \delta) = (0.35,\ 0.45,\ 0.20,\ 0)`$. Anything not paid out stays in the pool $`I`$.
+Each epoch, the pool pays out a fraction $`\eta`$ of what it holds. Governance may set it from 1% to 25%. **The default is 5%** ($`\eta = 0.05`$, the same as `EMISSION_RATE` in `ParameterRegistry` on main and the §10.3 table). The range is the fence; 5% is where it starts. That payout is split four ways: $`\alpha`$ to minters, $`\beta`$ to provers, $`\gamma`$ to settlers and $`\delta`$ to proof-of-work. The defaults are $`(\alpha, \beta, \gamma, \delta) = (0.35,\ 0.45,\ 0.20,\ 0)`$. Anything not paid out stays in the pool $`I`$.
 
 **No new money is printed (*no inflation*).** Rewards come only from fees. So the pool can never go below zero.
 
@@ -598,7 +620,7 @@ Lost notes stay counted in $`P`$ forever. In practice they are gone, like lost c
 
 **In plain words.** What the outside report said about the pool, and what we took from it.
 
-The report pays out $`E_{\mathrm{em}} = E_{\mathrm{pool}}(1 - e^{-\gamma})`$ each epoch, with $`\gamma = 0.05`$. That is about 4.88% of the pool per epoch, close to a payout rate of $`\eta = 0.05`$ in §9.2. It splits the payout 20% to minters and 80% to provers, adjusted as conditions change:
+The report pays out $`E_{\mathrm{em}} = E_{\mathrm{pool}}(1 - e^{-\gamma})`$ each epoch, with $`\gamma = 0.05`$. That is about 4.88% of the pool per epoch. It is the same idea as §9.2's default of $`\eta = 0.05`$: a fixed share of whatever is in the pool. The report's version just writes the share as $`1 - e^{-\gamma}`$. We use the simpler form, where $`\eta`$ is the share itself. It splits the payout 20% to minters and 80% to provers, adjusted as conditions change:
 
 ```math
 \alpha(L) = \max\!\big(0.05,\ 0.20 - \eta_L \max(0,\ L - L_{\mathrm{target}})\big), \quad L_{\mathrm{target}} = 60\ \mathrm{s},\ \eta_L = 0.005\ \mathrm{s}^{-1}.
@@ -624,7 +646,7 @@ Today, `CirculatoryEngine` uses `OwnableUpgradeable` and `UUPSUpgradeable`. That
 ### 10.2 Voting
 
 - **Who votes:** every human gets one anonymous *personhood credential*, a digital pass that proves you are one unique person without saying who. Each vote uses a one-time code per proposal, $`H(15, \mathsf{personSecret}, \mathsf{proposalId})`$. So each person votes once per proposal. The vote can't be linked to who you are or how much money you have.
-- **Quadratic voting:** each person gets $`\Omega`$ *voice credits* per season. Casting $`n`$ votes on one issue costs $`n^2`$ credits. So 1 vote costs 1 credit, 2 votes cost 4, and 3 votes cost 9. Caring a lot is possible, but expensive. Money gives **no** voting power at all. (§10.6 later replaces this with plural conviction voting.)
+- **How votes count:** one person, one vote, built up over time by conviction (§10.6), with the plural discount for tight-knit blocs. Money gives **no** voting power at all. People show how strongly they care by *how long* they keep their support, not by buying extra votes. This is what `ConvictionVoting` on main does. (An earlier draft used quadratic voting; see [Appendix A.1](#a1-quadratic-voting-vs-one-person-one-vote-conviction) for why it was dropped.)
 - **Stopping bribes:** ballots are encrypted in the style of *MACI* (Minimal Anti-Collusion Infrastructure). Voters can change their key and vote again. So no voter can prove to a briber how they voted, and a briber can never be sure they got what they paid for.
 - **Quorum and passing:** a *quorum* is the minimum turnout for a vote to count. Here it is $`q \ge 5\%`$ of registered people. A proposal passes with more than 50%, $`\gt 50\%`$ (or $`\gt 66\%`$ for *constitutional* changes, the most basic rules).
 
@@ -645,7 +667,7 @@ x_{\mathrm{new}} \in [x_{\min},\ x_{\max}], \qquad |x_{\mathrm{new}} - x_{\mathr
 | $`\kappa`$ | 9 | $`[0, 20]`$ | 2 |
 | $`g`$, $`H`$, $`W_r`$ | 7, 90, 30 days | $`[1, 365]`$ days | 50% |
 | $`\rho`$ | 0.002 | $`[0, 0.01]`$ | 0.001 |
-| $`\gamma_c`$ | 0.02 | $`[0, 0.05]`$ | 0.005 |
+| $`\gamma_c`$ | 0.02 | $`[0, 0.05]`$ (registry today; recommended $`[0, 0.20]`$ with the 5 TCL fixed cap, pending Ian, see A.4) | 0.005 |
 | $`\phi`$ | 0.2 | $`[0, 0.5]`$ | 0.05 |
 | $`\eta`$ | 0.05 | $`[0.01, 0.25]`$ | 0.02 |
 
@@ -698,7 +720,7 @@ The report's hardware advice applies to the optional biometric path and to the c
 
 ### 10.6 Plural conviction voting
 
-**In plain words.** In *conviction voting*, your support for a proposal builds up slowly the longer you keep it there, like a dimmer switch turning up. A sudden burst of votes counts for little. *Plural* means that groups who always vote together count somewhat less each, so a bloc can't dominate. This is the Phase 2 goal and replaces plain quadratic voting from §10.2.
+**In plain words.** In *conviction voting*, your support for a proposal builds up slowly the longer you keep it there, like a dimmer switch turning up. A sudden burst of votes counts for little. *Plural* means that groups who always vote together count somewhat less each, so a bloc can't dominate. This is the voting rule (§10.2, decision 5 in §12). It is built in `contracts/governance/ConvictionVoting.sol`. Each person's support is their weight $`W_i`$ (1 if no plural hook is plugged in). It grows using the normalized formula below and fades with the half-life from `ParameterRegistry` (7 days, settable from 3 to 30). **Not yet built:** a real plural-weight module (only the `IPluralWeight` hook and a test mock exist) and a real personhood check (mock).
 
 The report's formula. $`Y`$ is the built-up support, $`S`$ is what a person stakes, $`\alpha`$ is how much support carries over each step, and $`\tau_{1/2}`$ is the *half-life*, the time for old support to fade by half:
 
@@ -766,7 +788,7 @@ So the PPP rule **clashes with TCL's fixed supply** and is not adopted. UBI is o
 
 1. **Phase 1:** combine personhood credentials; a multisig plus timelock as a safety net (Stage 1 of §10.4).
 2. **Phase 2:** personhood without biometrics, plural conviction voting, and governance becomes the owner (Stage 2).
-3. **Phase 3:** the core becomes unchangeable (Stage 3); optionally the PPP controller (but see §10.7: it conflicts with fixed supply) and futarchy with a citizen veto.
+3. **Phase 3:** the core becomes unchangeable (Stage 3), with futarchy and a citizen veto. Any price-stability goal is met **without printing money**: governance may nudge only the limited dials in §10.3 (decay rate, pool share, payout rate), within their fences and timelocks. The money-printing PPP controller is rejected; see [Appendix A.2](#a2-ppp-money-printing-vs-fixed-supply).
 
 ### 10.9 Tiered personhood and Sybil unprofitability (owner-confirmed design)
 
@@ -989,7 +1011,7 @@ See §10.9. **Not built yet; personhood is a mock today.**
 
 **Checking the conviction math.** $`t_{1/2} = \ln 0.5 / \ln 0.9057 \approx 6.998`$ days. That is correct. With the normalized formula, after one day your support reaches $`1 - \alpha \approx 9.4\%`$ of its full level.
 
-**Checking the fake-identity math.** Under quadratic voting, splitting $`V`$ credits across $`k`$ fake identities gives $`k\sqrt{V/k} = \sqrt{kV}`$ votes. That is correct, and it shows splitting pays. For example, 100 credits in one identity buy 10 votes, but split over 4 identities they buy 4 × 5 = 20 votes. That is why personhood must be strong. The report's phrase "resistance $`\mathcal{O}(1/k)`$" is loose wording. Its claim $`\mathrm{Cost}_{\mathrm{Sybil}}(k) = \gamma k^2 + \delta k`$ is still stated without proof.
+**Checking the fake-identity math (why quadratic voting was dropped, A.1).** Under quadratic voting, splitting $`V`$ credits across $`k`$ fake identities gives $`k\sqrt{V/k} = \sqrt{kV}`$ votes. That is correct, and it shows splitting pays. For example, 100 credits in one identity buy 10 votes, but split over 4 identities they buy 4 × 5 = 20 votes. That is why personhood must be strong. The report's phrase "resistance $`\mathcal{O}(1/k)`$" is loose wording. Its claim $`\mathrm{Cost}_{\mathrm{Sybil}}(k) = \gamma k^2 + \delta k`$ is still stated without proof.
 
 ## 13. Open questions (still unresolved)
 
@@ -997,7 +1019,7 @@ See §10.9. **Not built yet; personhood is a mock today.**
 
 1. **Cost of faking people (Q12).** The tiered design (§10.9) handles it in principle. But the actual numbers are not chosen yet: $`L_n`$, $`v_n`$, $`B_v`$, $`r_v`$, $`c^*`$, $`m^*`$, and estimates of how often fakes get caught.
 2. **Cost of copying a note.** Check that copying one asymmetric-chip note costs more than the 500 top value allows (Q6).
-3. **Cost-credit cap.** This spec says at most 5% of face value (§7.2); the built MVP allows up to 20%. The owner is deciding.
+3. **Cost-credit cap.** Recommended: the lower of up to 20% of face value or 5 TCL (§7.2, Appendix A.4). This needs Ian's approval and then two code changes: widen the registry `COST_CAP` maximum to 0.20, and have `NoteController` read its caps from governance.
 
 ## 14. Research received
 
@@ -1012,3 +1034,51 @@ See §10.9. **Not built yet; personhood is a mock today.**
 | Personhood and governance | §10.5–§10.8, §12 | **Received**: Gemini deep research (user-supplied, 2026-10-23) and master Part E |
 
 **How good are the sources?** Several sources the report cites are second-hand or weak. We don't rely on them. They include accio.com, chainscorelabs.com, coinlive.com, mikkoikola.com, okx.com, binance.com and forklog.com. Claims that rest on them are marked †. Better original sources are in the report's own list, such as NXP AN12196, the Baldimtsi et al. paper on transferable e-cash, the Plonky2 blog and the CNPD ruling. Details about legal bans in Q12 are left out, by the owner's choice (R7).
+
+
+---
+
+## Appendix A. Rejected alternatives and why
+
+**In plain words.** Earlier drafts and the research suggested some ideas that clash with TCL's goals. They are kept here, with the reasons, so nothing is quietly lost. The goals they were judged against: no rich person or group can take control; the supply is fixed (no printing); no transaction fees; ordinary people govern; the owner's locked decisions (§12); and honest minting must pay.
+
+### A.1 Quadratic voting vs one-person-one-vote conviction
+
+| | Quadratic voting (old §10.2) | One person, one vote with conviction and plural discount (adopted) |
+| --- | --- | --- |
+| Can money buy votes? | No | No |
+| Shows how strongly you care | Yes, by spending credits ($`n`$ votes cost $`n^2`$) | Yes, by keeping support longer |
+| Payoff from fake identities | Grows: $`k`$ fakes turn $`V`$ credits into $`\sqrt{kV}`$ votes | Each fake is just one more vote, also discounted if it shares contacts with the others |
+| Matches decision 5 (§12) | No | Yes |
+| Built on main | No | Yes (`ConvictionVoting`) |
+
+**Why.** Quadratic voting makes splitting pay. 100 credits held by one person buy 10 votes. The same 100 credits split across 4 fakes buy 4 × 5 = 20. Under conviction voting, 4 fakes give at most 4 votes, the same as 4 real people, and each counts less if they share contacts. Personhood is still a mock, so this is the safer choice. The good part of quadratic voting, showing how much you care, is kept, but through time instead of credits.
+
+### A.2 PPP money-printing vs fixed supply
+
+| | PPP controller (old Phase 3) | Non-issuing dials (adopted) |
+| --- | --- | --- |
+| Prints new money | Yes: $`u = (\lambda + \mu)M/N`$ | No |
+| Needs a price feed (oracle) | Yes, a central source | No |
+| Fixed supply kept | No | Yes |
+| Who can capture it | Whoever controls the feed | Governance only, inside the §10.3 fences |
+
+**Why.** Printing money breaks the fixed supply (§9.3), and a price feed is a single point of control, which §7.6 already rejects for CPI. What stays: UBI paid only from fees (decision 3), and governance moving the limited dials slowly.
+
+### A.3 Pool payout rate: default vs range
+
+This was not a real conflict. §9.2 gave only the allowed range (1%–25%). §9.4 and §10.3 gave the default (5%). They are now stated together in §9.2. The code agrees: `EMISSION_RATE` defaults to 0.05 with bounds [0.01, 0.25] and moves at most 0.02 per cycle. The report's $`1 - e^{-0.05} \approx 4.88\%`$ describes almost the same payout, written another way.
+
+### A.4 Cost-credit cap: 5% vs 20%
+
+| | Flat 5% (old spec, registry `COST_CAP` max) | Flat 20% (`NoteController` `MAX_COST_BPS`) | Recommended: the lower of 20% or 5 TCL |
+| --- | --- | --- | --- |
+| Small notes (5 TCL) | Credit at most 0.25. Too little to cover the chip, so nobody makes small notes | At most 1 | At most 1 |
+| Large notes (500 TCL) | At most 25 | At most 100, invites over-claiming | At most 5 |
+| Worst-case pool drain per mint | ≤ 25 | ≤ 100 | ≤ 5 |
+| Minting pays for honest makers | Not for small notes | Yes | Yes, wherever real cost ≤ cap |
+| Code change needed | Contract | Registry and spec | Registry max → 0.20; `NoteController` reads caps from governance |
+
+**Why.** The real cost of a note is about the same for every denomination (one chip and one plastic note; §7.6 estimates USD 1.6–2.3 each at 1 million notes). A percentage cap pays too little on small notes and too much on big ones. A fixed cap in TCL, with a percentage ceiling so tiny notes can't claim more than 20% of face value, fits a flat cost. The contract's 20% stays as the outer hard limit. The median rule (§7.2) and the per-epoch budget (§7.4) still limit cheating. Profit for an honest minter is $`R_d + (C_d - \text{real cost}) = R_d \ge 0`$ whenever real cost ≤ cap. If a small note really costs more than 1 TCL to make, new 5-notes won't pay. Re-arming existing notes (no new hardware) would then be the main source of small notes. **This is a recommendation pending Ian. The contract is unchanged.**
+
+*Exchange-rate caveat:* the hardware costs are in US dollars, and TCL has no fixed dollar price, so the 5 TCL figure needs checking once a market price exists.
