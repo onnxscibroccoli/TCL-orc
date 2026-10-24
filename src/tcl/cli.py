@@ -459,5 +459,159 @@ def chain_settle(proof_file: Path,
     typer.echo(json.dumps(ev))
 
 
+# --- localnet (offline, EVM-free local testnet; see docs/14_tcl_localnet_plan.md) -------
+localnet_app = typer.Typer(help="Offline TCL-native local testnet (replaces anvil)",
+                           no_args_is_help=True)
+ln_time_app = typer.Typer(help="Chain time controls (dev only)", no_args_is_help=True)
+localnet_app.add_typer(ln_time_app, name="time")
+app.add_typer(localnet_app, name="localnet")
+LN_DIR = typer.Option(Path(".tcl/localnet"), "--data-dir", help="localnet state directory")
+
+
+def _ln_url(data_dir: Path) -> str:
+    f = data_dir / "node.json"
+    if not f.exists():
+        typer.echo(f"localnet not running (no {f})", err=True)
+        raise typer.Exit(1)
+    return json.loads(f.read_text())["url"]
+
+
+def _ln(data_dir: Path, method: str, *params: object) -> None:
+    from .localnet.rpc import RPCError, call
+    try:
+        typer.echo(json.dumps(call(_ln_url(data_dir), method, list(params)), indent=2))
+    except RPCError as e:
+        typer.echo(json.dumps({"error": str(e), "code": e.code, "data": e.data}), err=True)
+        raise typer.Exit(1)
+    except OSError as e:
+        typer.echo(f"localnet unreachable: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@localnet_app.command("start")
+def ln_start(data_dir: Path = LN_DIR, validators: int = typer.Option(4, "--validators", "-n"),
+             port: int = typer.Option(8645, "--port"), seed: str = typer.Option("tcl-dev"),
+             dev: bool = typer.Option(True, "--dev/--no-dev",
+                                      help="enable dev-only RPC (mine/warp/snapshot/...)"),
+             consensus: str = typer.Option("bft", "--consensus",
+                                           help="bft (TendermintEngine, default) | fast "
+                                                "(PLACEHOLDER round-robin)"),
+             foreground: bool = typer.Option(False, "--foreground")) -> None:
+    """Start N in-process validators with deterministic genesis and a localhost JSON-RPC."""
+    import subprocess
+    import sys
+    from .localnet.rpc import call
+    argv = [sys.executable, "-m", "tcl.localnet", "--data-dir", str(data_dir), "--port",
+            str(port), "--validators", str(validators), "--seed", seed, "--consensus", consensus] + (["--dev"] if dev else [])
+    if foreground:
+        from .localnet.__main__ import main
+        main(argv[3:])
+        return
+    if (data_dir / "node.json").exists():
+        typer.echo("localnet already running (or stale node.json; run `tcl localnet stop`)",
+                   err=True)
+        raise typer.Exit(1)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    log = open(data_dir / "node.log", "ab")
+    proc = subprocess.Popen(argv, stdout=log, stderr=log, start_new_session=True)
+    for _ in range(100):
+        if (data_dir / "node.json").exists():
+            try:
+                typer.echo(json.dumps(call(_ln_url(data_dir), "tcl_status"), indent=2))
+                return
+            except OSError:
+                pass
+        if proc.poll() is not None:
+            break
+        time.sleep(0.1)
+    typer.echo(f"localnet failed to start; see {data_dir / 'node.log'}", err=True)
+    raise typer.Exit(1)
+
+
+@localnet_app.command("stop")
+def ln_stop(data_dir: Path = LN_DIR) -> None:
+    """Stop the localnet node (state persists in --data-dir)."""
+    import os
+    import signal
+    f = data_dir / "node.json"
+    if not f.exists():
+        typer.echo("localnet not running")
+        return
+    pid = json.loads(f.read_text())["pid"]
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        f.unlink(missing_ok=True)
+    for _ in range(50):
+        if not f.exists():
+            break
+        time.sleep(0.1)
+    typer.echo(json.dumps({"stopped": pid}))
+
+
+@localnet_app.command("status")
+def ln_status(data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_status")
+
+
+@localnet_app.command("mine")
+def ln_mine(count: int = typer.Argument(1), data_dir: Path = LN_DIR) -> None:
+    """Produce COUNT blocks now (dev only)."""
+    _ln(data_dir, "tcl_mine", count)
+
+
+@ln_time_app.command("advance")
+def ln_time_advance(seconds: int, data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_warp", seconds)
+
+
+@ln_time_app.command("set")
+def ln_time_set(unix_ts: int, data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_setTime", unix_ts)
+
+
+@localnet_app.command("snapshot")
+def ln_snapshot(data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_snapshot")
+
+
+@localnet_app.command("revert")
+def ln_revert(snapshot_id: str, data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_revert", snapshot_id)
+
+
+@localnet_app.command("faucet")
+def ln_faucet(address: str, amount: int, data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_faucet", address, amount)
+
+
+@localnet_app.command("fault")
+def ln_fault(validator: int, kind: str = typer.Argument(..., help="offline|online|byzantine|honest"),
+             data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_injectFault", {"validator": validator, "kind": kind})
+
+
+@localnet_app.command("accounts")
+def ln_accounts(data_dir: Path = LN_DIR) -> None:
+    """List genesis dev accounts (Ed25519 pubkeys; dev only)."""
+    _ln(data_dir, "tcl_devAccounts")
+
+
+@localnet_app.command("transfer")
+def ln_transfer(sender: str, to: str, amount: int, data_dir: Path = LN_DIR) -> None:
+    """Sign (dev key) and submit a transfer from a genesis dev account (dev only)."""
+    _ln(data_dir, "tcl_devSend", sender, "transfer", {"to": to, "amount": amount})
+
+
+@localnet_app.command("account")
+def ln_account(address: str, data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_getAccount", address)
+
+
+@localnet_app.command("block")
+def ln_block(height: int, data_dir: Path = LN_DIR) -> None:
+    _ln(data_dir, "tcl_getBlock", height)
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()
