@@ -428,28 +428,40 @@ Why this works: minters compete. Claiming too much can't push your refund above 
 
 Re-arming an existing note (Option A) gets $`C_d = 0`$, because no new hardware is made.
 
-> [!IMPORTANT]
-> **Recommendation pending Ian (contract not changed).** The spec used to say a flat 5% of face value. `NoteController` allows up to 20% (`MAX_COST_BPS = 2000`). Recommended synthesis: a percentage cap *and* a fixed TCL cap, whichever is lower. Details in [Appendix A.4](#a4-cost-credit-cap-5-vs-20).
+> [!NOTE]
+> **Decided by Ian's criteria (2026-10-23), implemented in [PR #20](https://github.com/onnxscibroccoli/TCL-orc/pull/20) (draft).** The criteria: capture-resistant, fixed supply, minting profitable, pool not drainable by over-claiming, and small everyday notes must actually get made. All seven options compared are in [Appendix A.4](#a4-cost-credit-cap-5-vs-20).
 
-**Recommended cap rule (pending Ian).** A chip costs about the same whether it goes in a 5 note or a 500 note. So a pure percentage cap is wrong at both ends. 5% of a 5 TCL note is only 0.25 TCL, too little to pay for the note, so nobody would make small notes. 20% of a 500 TCL note is 100 TCL, far too much, and it invites over-claiming. Use the lower of the two:
+**The rule, step by step.**
+
+1. **New note.** The cost credit is the smallest of four numbers: what you claim, a per-note override cap, a percentage of face value, and a fixed amount.
+2. **Small-note bonus.** New 5, 10 and 20 notes get a small flat bonus on top of the normal reward. A chip costs the same in a 5 note as in a 500 note, so this makes small notes worth making.
+3. **Re-arming.** Putting an old note back into use gets no cost credit, because no new hardware is made. It gets the normal reward only if the note's last era lasted at least 7 days. That stops people from farming rewards by depositing and re-arming over and over.
+4. **Per-mint ceiling.** Credit plus reward can never exceed 60% of face value.
+5. **Reserved budget.** Half of each epoch's budget is kept for small notes, so big mints can't use it all up.
+6. **Fail closed.** If governance's settings can't be read, minting becomes a plain 1-for-1 swap.
 
 ```math
-c^{\max}_d = \min\bigl(\gamma_c \cdot V_d,\ c_{\mathrm{abs}}\bigr), \qquad \gamma_c \le 0.20,\quad c_{\mathrm{abs}} = 5\ \mathrm{TCL}.
+\begin{aligned}
+C_d &= \min\bigl(\hat c,\ \gamma_c \cdot V_d,\ c_{\mathrm{abs}}\bigr) \quad (\text{new note}), \qquad C_d = 0 \quad (\text{re-arm}),\\
+R_d &= \rho \cdot V_d + b_{\mathrm{small}} \cdot \mathbb{1}[V_d \le 20 \text{ and new note}], \qquad C_d + R_d \le 0.6\, V_d .
+\end{aligned}
 ```
 
-where $`\gamma_c`$ is the percentage limit (the contract's hard ceiling is 20%) and $`c_{\mathrm{abs}}`$ is the fixed cap in TCL (from §7.6).
+where $`\gamma_c`$ is the percentage cap (default 0.40, hard limit 0.50), $`c_{\mathrm{abs}}`$ is the fixed cap (default 3 TCL, hard limit 10), $`\rho`$ is the reward rate (default 0.002, hard limit 0.01), $`b_{\mathrm{small}}`$ is the small-note bonus (default 0.25 TCL, hard limit 1) and $`\mathbb{1}[\cdot]`$ is 1 when the condition holds and 0 otherwise. All of these live in `ParameterRegistry`. Governance can move them only within those limits, one step per cycle.
 
-| Note | 20% of face | Fixed cap | Credit cap | As % of face |
-| --- | --- | --- | --- | --- |
-| 5 | 1 | 5 | **1** | 20% |
-| 10 | 2 | 5 | **2** | 20% |
-| 20 | 4 | 5 | **4** | 20% |
-| 50 | 10 | 5 | **5** | 10% |
-| 100 | 20 | 5 | **5** | 5% |
-| 200 | 40 | 5 | **5** | 2.5% |
-| 500 | 100 | 5 | **5** | 1% |
+**Defaults for every note value, with an attested cost above the cap (checked by `test_DefaultScheduleAllDenominations`).**
 
-The median rule above still applies on top, so an honest cost below the cap is what actually gets paid.
+| Note | Cost credit | Reward | Total | % of face | Honest minter's profit if real cost is 2 TCL |
+| --- | --- | --- | --- | --- | --- |
+| 5 | 2 | 0.01 + 0.25 = 0.26 | 2.26 | 45.2% | 0.26 |
+| 10 | 3 | 0.02 + 0.25 = 0.27 | 3.27 | 32.7% | 0.27 |
+| 20 | 3 | 0.04 + 0.25 = 0.29 | 3.29 | 16.45% | 0.29 |
+| 50 | 3 | 0.10 | 3.10 | 6.2% | 0.10 |
+| 100 | 3 | 0.20 | 3.20 | 3.2% | 0.20 |
+| 200 | 3 | 0.40 | 3.40 | 1.7% | 0.40 |
+| 500 | 3 | 1.00 | 4.00 | 0.8% | 1.00 |
+
+An honest minter's profit is the reward, whenever the real cost is at or under the cap (2 TCL for a 5 note, 3 TCL for the others). The extra a cheater can grab by over-claiming is at most cap minus real cost: 0 for a 5 note and 1 TCL for the others at a real cost of 2. The 2 TCL cost is an estimate (USD 1.6–2.3 at volume, §7.6), and TCL has no dollar price yet. **Not built yet:** the median rule above is not on-chain, and minting still doesn't check that a real note exists. So the epoch budget is what actually limits how much fake mints could take.
 
 **Example.** Minting a 100 TCL note. You claim a cost of 4 TCL. Recent minters' median is 3 TCL, so $`\tilde c_d = 3 \times 1.05 = 3.15`$. The cap at 5% is 5 TCL. Your credit is the smallest: 3.15 TCL.
 
@@ -517,7 +529,7 @@ with $`C_{\mathrm{base}} = 1.50`$, $`C_{\mathrm{cap}} = 5.00`$, $`\mu_{\max} = 0
 R_d = \min\!\Big(V_d\,\rho_{\max}\max\!\big(0,\ 1 - \tfrac{P}{p^{*}M}\big),\ \tfrac{\alpha\mathcal{E}_e}{\max(1,n_e)}\Big), \quad \rho_{\max} = 0.01,\ p^{*} = 0.2 \ (\text{proposed}).
 ```
 
-- **Cost cap:** set $`c^{\max}_d = \min(\gamma_c V_d,\ 5\ \text{TCL})`$. Adopted in §7.2, with $`\gamma_c`$ up to 0.20 (recommendation pending Ian).
+- **Cost cap:** set $`c^{\max}_d = \min(\gamma_c V_d,\ 5\ \text{TCL})`$. Superseded by the decided rule in §7.2 (percentage and fixed cap, small-note bonus, re-arm with no cost credit).
 
 **Part D (hardware).** The proposed note is made of plastic film (*BOPP polymer*, like some modern banknotes). It has shiny color-shifting patches (*OVD*), inks that glow under ultraviolet (UV) and infrared (IR) light, an optical PUF layer, and a built-in chip that talks to phones by tap (*NFC SE*). Its silver antenna lines break if someone peels the layers apart (*delamination*). The report says a note lasts 8–10 years † and gives cost per note:
 
@@ -667,7 +679,11 @@ x_{\mathrm{new}} \in [x_{\min},\ x_{\max}], \qquad |x_{\mathrm{new}} - x_{\mathr
 | $`\kappa`$ | 9 | $`[0, 20]`$ | 2 |
 | $`g`$, $`H`$, $`W_r`$ | 7, 90, 30 days | $`[1, 365]`$ days | 50% |
 | $`\rho`$ | 0.002 | $`[0, 0.01]`$ | 0.001 |
-| $`\gamma_c`$ | 0.02 | $`[0, 0.05]`$ (registry today; recommended $`[0, 0.20]`$ with the 5 TCL fixed cap, pending Ian, see A.4) | 0.005 |
+| $`\gamma_c`$ | 0.40 | $`[0, 0.50]`$ | 0.05 |
+| $`c_{\mathrm{abs}}`$ | 3 TCL | $`[0, 10]`$ TCL | 1 TCL |
+| $`b_{\mathrm{small}}`$ | 0.25 TCL | $`[0, 1]`$ TCL | 0.25 TCL |
+| small-note budget reserve | 50% | $`[0, 80\%]`$ | 10 points |
+| minimum era age before a re-arm reward | 7 days | $`[1, 90]`$ days | 50% |
 | $`\phi`$ | 0.2 | $`[0, 0.5]`$ | 0.05 |
 | $`\eta`$ | 0.05 | $`[0.01, 0.25]`$ | 0.02 |
 
@@ -1019,7 +1035,7 @@ See §10.9. **Not built yet; personhood is a mock today.**
 
 1. **Cost of faking people (Q12).** The tiered design (§10.9) handles it in principle. But the actual numbers are not chosen yet: $`L_n`$, $`v_n`$, $`B_v`$, $`r_v`$, $`c^*`$, $`m^*`$, and estimates of how often fakes get caught.
 2. **Cost of copying a note.** Check that copying one asymmetric-chip note costs more than the 500 top value allows (Q6).
-3. **Cost-credit cap.** Recommended: the lower of up to 20% of face value or 5 TCL (§7.2, Appendix A.4). This needs Ian's approval and then two code changes: widen the registry `COST_CAP` maximum to 0.20, and have `NoteController` read its caps from governance.
+3. **Cost-credit cap: decided** (§7.2, PR #20, draft). Still open: the real dollar cost of a note, and a TCL market price, to confirm the 3 TCL default. Also on-chain hardware attestation, which would let the epoch budget be raised safely.
 
 ## 14. Research received
 
@@ -1071,14 +1087,31 @@ This was not a real conflict. §9.2 gave only the allowed range (1%–25%). §9.
 
 ### A.4 Cost-credit cap: 5% vs 20%
 
-| | Flat 5% (old spec, registry `COST_CAP` max) | Flat 20% (`NoteController` `MAX_COST_BPS`) | Recommended: the lower of 20% or 5 TCL |
-| --- | --- | --- | --- |
-| Small notes (5 TCL) | Credit at most 0.25. Too little to cover the chip, so nobody makes small notes | At most 1 | At most 1 |
-| Large notes (500 TCL) | At most 25 | At most 100, invites over-claiming | At most 5 |
-| Worst-case pool drain per mint | ≤ 25 | ≤ 100 | ≤ 5 |
-| Minting pays for honest makers | Not for small notes | Yes | Yes, wherever real cost ≤ cap |
-| Code change needed | Contract | Registry and spec | Registry max → 0.20; `NoteController` reads caps from governance |
+**Decided by Ian's criteria (2026-10-23).** Scores run from 1 (bad) to 5 (good). For complexity, 5 means simplest.
 
-**Why.** The real cost of a note is about the same for every denomination (one chip and one plastic note; §7.6 estimates USD 1.6–2.3 each at 1 million notes). A percentage cap pays too little on small notes and too much on big ones. A fixed cap in TCL, with a percentage ceiling so tiny notes can't claim more than 20% of face value, fits a flat cost. The contract's 20% stays as the outer hard limit. The median rule (§7.2) and the per-epoch budget (§7.4) still limit cheating. Profit for an honest minter is $`R_d + (C_d - \text{real cost}) = R_d \ge 0`$ whenever real cost ≤ cap. If a small note really costs more than 1 TCL to make, new 5-notes won't pay. Re-arming existing notes (no new hardware) would then be the main source of small notes. **This is a recommendation pending Ian. The contract is unchanged.**
+| Option | Small notes get made | Pool safe from over-claiming | Hard to capture or collude | Simple | Minting pays | Governable |
+| --- | --- | --- | --- | --- | --- | --- |
+| Flat 5% | 1: credit 0.25 on a 5 note | 4: at most 25 per mint | 3 | 5 | 2: small notes lose money | 3 |
+| Flat 20% | 3: credit 1 on a 5 note, below the ~2 cost | 1: up to 100 per 500 note | 2 | 5 | 3 | 3 |
+| Lower of 20% or 5 TCL | 3 | 4: at most 5 | 3 | 4 | 3: small notes marginal | 3 |
+| Fixed cap per note value, set by governance | 4 | 4 | 2: seven settings to lobby | 3 | 4 | 4 |
+| Median of claimed costs with fixed and % caps | 3 | 5 | 2: a cartel can shift the median; costly to run on-chain | 1 | 4 | 3 |
+| Cost-plus with a small-note bonus | 5 | 3: bonus needs a budget limit | 3 | 3 | 5 | 4 |
+| Re-arm first (no new-hardware credit) | 2: needs notes to exist already | 5 | 4 | 4 | 2 | 3 |
+| **Chosen: combined rule (§7.2)** | **5** | **4** | **4** | **3** | **5** | **5** |
 
-*Exchange-rate caveat:* the hardware costs are in US dollars, and TCL has no fixed dollar price, so the 5 TCL figure needs checking once a market price exists.
+**Why the combined rule wins.**
+
+- **Small notes get made.** A flat bonus on 5, 10 and 20 notes, plus a 40% percentage cap, covers an estimated 2 TCL chip even in a 5 note. Half of each epoch's budget is reserved for small notes, so big mints can't use it all.
+- **The pool stays safe.**
+  - The fixed cap holds over-claiming on big notes to at most 3 TCL, compared with 100 under a flat 20%.
+  - Credit can never exceed 60% of face value.
+  - Re-arms get no cost credit, and their reward waits 7 days, so rewards can't be farmed.
+  - The epoch budget caps everything.
+- **Capture and collusion are hard.** Each value can move only within its limits and by one step per cycle (§10.3), and only by vote. The contract's hard limits can't be voted past.
+- **Re-arming comes first.** Old notes go back into use at no hardware cost. New hardware is paid for only where it's needed.
+- **Fixed supply holds.** Every credit comes from the fee-funded pool, and minting is still backed 1-for-1. Tests check that total supply never changes (fuzz and invariant).
+
+**What we gave up:** some simplicity, since there are five settings instead of one. And the median rule stays off-chain until it can be built cheaply.
+
+**Superseded options, kept for the record.** The flat 5% cap, the flat 20% cap, and "the lower of 20% or 5 TCL" (the previous recommendation) are replaced by the rule above.
