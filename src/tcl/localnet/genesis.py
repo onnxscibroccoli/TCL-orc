@@ -28,10 +28,22 @@ class Genesis:
     dev_balance: int = 1_000_000_000_000  # base units
     notes: tuple[int, ...] = (5, 10, 20, 50, 100, 500)  # mock physical-note denominations
     accounts: tuple[DevAccount, ...] = field(default=())
+    # --- native modules (docs/15) ---
+    seats: int = 0              # active validator seats; 0 = all `validators` nodes are seated
+    epoch_blocks: int = 100     # validator rotation every N blocks (0 disables)
+    term_epochs: int = 4
+    cooldown_epochs: int = 4
+    validator_bond: int = 1_000_000
+    note_unit: int = 1_000_000  # base units per face-value 1
+    dev_proofs: bool = False    # DEV ONLY: accept {"dev": true} instead of Groth16 proofs
 
     def __post_init__(self) -> None:
         if not 1 <= self.validators <= 64:
             raise ValueError("validators must be in [1, 64]")
+        if not 0 <= self.seats <= self.validators:
+            raise ValueError("seats must be in [0, validators]")
+        if self.epoch_blocks < 0 or self.term_epochs < 1 or self.cooldown_epochs < 0:
+            raise ValueError("bad epoch parameters")
         if self.block_time <= 0:
             raise ValueError("block_time must be positive")
 
