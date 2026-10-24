@@ -22,7 +22,6 @@ Validator-set rules (docs/13, 13a):
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 from typing import Any, Optional
 

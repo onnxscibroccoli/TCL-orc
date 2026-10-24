@@ -378,6 +378,29 @@ class _HostApp:
         self.decided = (block, commit, rc)
 
 
+def init_validator_genesis(v: "Validator", g: Genesis) -> dict:
+    """Write genesis state into one validator's DB; return the (deterministic) genesis header.
+    Shared by the in-process Localnet and the multi-process node (proc.py)."""
+    t, chain_id = g.genesis_time, g.chain_id
+    persons = {f"person:{a.name}": a.personhood_tier for a in g.dev_account_list()}
+    chain0 = ChainState.genesis(chain_id, g.validator_ids(), persons, g.seats or g.validators,
+                                g.epoch_blocks, g.term_epochs, g.cooldown_epochs,
+                                g.validator_bond, g.note_unit)
+    with v.storage.transaction():
+        v.set_meta("chain", chain0)
+        for a in g.dev_account_list():
+            v.ledger.deposit(a.name, a.balance, t)
+        v.set_meta("height", 0)
+        v.set_meta("notes", [{"id": i, "face": f} for i, f in enumerate(g.notes)])
+    vals = ChainState(chain0, chain_id, None).validator_keys()
+    return make_header(chain_id=chain_id, height=0, time=t, prev_hash=GENESIS_PREV,
+                       tx_root=merkle_root([]), state_root=str(v.ledger.root()),
+                       validators_hash=validators_hash(vals),
+                       next_validators_hash=validators_hash(vals), proposer="00" * 32,
+                       app_version=APP_VERSION,
+                       aux_roots=ChainState(chain0, chain_id, None).aux_roots())
+
+
 class Localnet:
     """N simulated validators in one process. Not thread-safe: callers serialize."""
 
@@ -424,29 +447,13 @@ class Localnet:
 
     # --- genesis / persistence -------------------------------------------
     def _init_genesis(self) -> None:
-        t = self.genesis.genesis_time
-        g = self.genesis
-        persons = {f"person:{a.name}": a.personhood_tier for a in g.dev_account_list()}
-        chain0 = ChainState.genesis(self.chain_id, g.validator_ids(), persons,
-                                    g.seats or g.validators, g.epoch_blocks, g.term_epochs,
-                                    g.cooldown_epochs, g.validator_bond, g.note_unit)
+        hdr = None
         for v in self.validators:
-            with v.storage.transaction():
-                v.set_meta("chain", chain0)
-                for a in self.genesis.dev_account_list():
-                    v.ledger.deposit(a.name, a.balance, t)
-                v.set_meta("height", 0)
-                v.set_meta("notes", [{"id": i, "face": f}
-                                     for i, f in enumerate(self.genesis.notes)])
-        roots = {str(v.ledger.root()) for v in self.validators}
-        assert len(roots) == 1, "non-deterministic genesis"
-        hdr = make_header(chain_id=self.chain_id, height=0, time=t, prev_hash=GENESIS_PREV,
-                          tx_root=merkle_root([]), state_root=roots.pop(),
-                          validators_hash=validators_hash(self.vals_sorted),
-                          next_validators_hash=validators_hash(self.vals_sorted),
-                          proposer="00" * 32, app_version=APP_VERSION,
-                          aux_roots=ChainState(chain0, self.chain_id, None).aux_roots())
-        self.time = t
+            h = init_validator_genesis(v, self.genesis)
+            if hdr is not None and h != hdr:
+                raise AssertionError("non-deterministic genesis")
+            hdr = h
+        self.time = self.genesis.genesis_time
         self.blocks_path.write_text("")
         self._append(Block(hdr, [], []))
 

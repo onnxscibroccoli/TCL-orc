@@ -496,11 +496,17 @@ def ln_start(data_dir: Path = LN_DIR, validators: int = typer.Option(4, "--valid
              consensus: str = typer.Option("bft", "--consensus",
                                            help="bft (TendermintEngine, default) | fast "
                                                 "(PLACEHOLDER round-robin)"),
-             foreground: bool = typer.Option(False, "--foreground")) -> None:
+             foreground: bool = typer.Option(False, "--foreground"),
+             processes: bool = typer.Option(False, "--processes",
+                                            help="run each validator as its own OS process "
+                                                 "over authenticated localhost TCP p2p")) -> None:
     """Start N in-process validators with deterministic genesis and a localhost JSON-RPC."""
     import subprocess
     import sys
     from .localnet.rpc import call
+    if processes:
+        _ln_start_processes(data_dir, validators, port, seed, dev)
+        return
     argv = [sys.executable, "-m", "tcl.localnet", "--data-dir", str(data_dir), "--port",
             str(port), "--validators", str(validators), "--seed", seed, "--consensus", consensus] + (["--dev"] if dev else [])
     if foreground:
@@ -528,6 +534,44 @@ def ln_start(data_dir: Path = LN_DIR, validators: int = typer.Option(4, "--valid
     raise typer.Exit(1)
 
 
+def _ln_start_processes(data_dir: Path, n: int, port: int, seed: str, dev: bool) -> None:
+    import subprocess
+    import sys
+    from .localnet.genesis import Genesis
+    from .localnet.rpc import call
+    if (data_dir / "node.json").exists():
+        typer.echo("localnet already running (or stale node.json; run `tcl localnet stop`)",
+                   err=True)
+        raise typer.Exit(1)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    gp = data_dir / "genesis.json"
+    if not gp.exists():
+        gp.write_text(json.dumps(Genesis(validators=n, seed=seed).to_json(), indent=2,
+                                 sort_keys=True))
+    n = json.loads(gp.read_text())["validators"]
+    pids = []
+    for i in range(n):
+        log = open(data_dir / f"node{i}.log", "ab")
+        argv = [sys.executable, "-m", "tcl.localnet.proc", "--data-dir", str(data_dir),
+                "--index", str(i), "--base-port", str(port + 1)] + ([] if dev else ["--no-dev"])
+        pids.append(subprocess.Popen(argv, stdout=log, stderr=log, start_new_session=True).pid)
+    urls = []
+    for i in range(n):
+        f = data_dir / f"node{i}" / "node.json"
+        for _ in range(200):
+            if f.exists():
+                break
+            time.sleep(0.05)
+        if not f.exists():
+            typer.echo(f"node {i} failed to start; see {data_dir / f'node{i}.log'}", err=True)
+            raise typer.Exit(1)
+        urls.append(json.loads(f.read_text())["url"])
+    (data_dir / "node.json").write_text(json.dumps({"pid": pids, "url": urls[0], "urls": urls,
+                                                    "processes": True}))
+    typer.echo(json.dumps({"processes": n, "urls": urls,
+                           "status": call(urls[0], "tcl_status")}, indent=2))
+
+
 @localnet_app.command("stop")
 def ln_stop(data_dir: Path = LN_DIR) -> None:
     """Stop the localnet node (state persists in --data-dir)."""
@@ -538,6 +582,15 @@ def ln_stop(data_dir: Path = LN_DIR) -> None:
         typer.echo("localnet not running")
         return
     pid = json.loads(f.read_text())["pid"]
+    if isinstance(pid, list):  # --processes
+        for p in pid:
+            try:
+                os.kill(p, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        f.unlink(missing_ok=True)
+        typer.echo(json.dumps({"stopped": pid}))
+        return
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
