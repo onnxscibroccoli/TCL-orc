@@ -20,7 +20,7 @@ Don't deploy to a network that holds real value.
 
 - All signals are assigned with `<==` or constrained with `===`.
   The only `<--` hints are `DivConst.q` and `DivConst.r`, bound by `num === q*den + r` and the range checks `0 <= r <= den-1` and `q < 2^64` or `2^128`.
-  Bounds: `balance < 2^128`, `dt <= 604800`, and every product stays below 2^200, far below the field, so modular wrap is impossible.
+  Bounds: $`B < 2^{128}`$, $`\Delta t \le 604\,800`$, and every product stays below $`2^{200}`$, far below the field, so modular wrap is impossible.
 - Path bits are boolean (`bit*(bit-1) === 0`).
   Old and new account leaves share the same path, so step 1 is a single-leaf update.
 - **Full settle (account + vault):** the circuit proves both leaf writes of `Ledger.settle`, sequentially: `oldRoot -> midRoot` (account leaf) and `midRoot -> newRoot` (vault leaf += fee, time = newTime; unchanged when fee = 0, matching the ledger). The public `newRoot` therefore equals `Ledger.root()` after settle, which `build_transition_input` and `prove_settlement` check fail-closed.
