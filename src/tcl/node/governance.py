@@ -23,10 +23,17 @@ MIN_VOTE_TIER = 1
 # key -> (default, lo, hi, constitutional)
 DEFAULT_PARAMS: dict[str, tuple[int, int, int, bool]] = {
     "VOTE_HALF_LIFE": (7 * DAY, 3 * DAY, 30 * DAY, False),
+    # demurrage: applied by the ledger from the NEXT validator epoch (docs/15 §5)
     "DEMURRAGE_RATE_PPM_DAY": (500, 100, 1_000, False),       # 0.05%/day, bounds 0.01-0.1%
-    "MINT_REWARD_BPS": (100, 0, 100, False),
+    "DEMURRAGE_THRESHOLD_TCL": (5_000_000, 1_000_000, 50_000_000, False),
+    # note mint policy (PR #20, docs/11 §7.2); hard bounds mirror NoteController
+    "MINT_REWARD_BPS": (20, 0, 100, False),                   # rho 0.2%, <= 1%
+    "COST_CAP_BPS": (4000, 0, 5000, False),                   # gamma_c 40%, <= 50%
+    "COST_CAP_ABS_MILLI": (3000, 0, 10_000, False),           # c_abs 3 TCL, <= 10
+    "SMALL_BONUS_MILLI": (250, 0, 1_000, False),              # b_small 0.25 TCL, <= 1
+    "SMALL_RESERVE_BPS": (5000, 0, 8000, False),              # 50% of epoch budget, <= 80%
+    "MIN_CIRCULATION": (7 * DAY, DAY, 90 * DAY, False),       # re-arm reward era age
     "POOL_SHARE_BPS": (500, 100, 2_500, False),
-    "COST_CAP_BPS": (2000, 0, 2000, True),
     "UBI_ENABLED": (0, 0, 1, True),
 }
 

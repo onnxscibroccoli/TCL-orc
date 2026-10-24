@@ -30,8 +30,8 @@ def total(m, bank):
 def test_mint_cost_credit_reward_and_fallback():
     m, bank = mk(pool=10**9)
     t0 = total(m, bank)
-    cost, reward = m.mint("m", 1, 100, 10**9, now=1000)        # attested cost above cap
-    assert cost == m.s.denoms["100"][1] and reward == 100 * U * 100 // 10_000
+    cost, reward = m.mint("m", 1, 100, 10**9, now=1000)        # attested cost above caps
+    assert cost == 3 * U and reward == 100 * U * 20 // 10_000   # c_abs binds; rho = 0.2%
     assert m.s.notes["1"]["state"] == LIVE and total(m, bank) == t0
     m.check_invariants()
     m2, b2 = mk(pool=0)                                         # empty pool -> pure 1:1 swap
@@ -42,13 +42,91 @@ def test_mint_cost_credit_reward_and_fallback():
 
 def test_epoch_budget_falls_back():
     m, bank = mk(pool=10**12)
-    m.set_params(100, 86_400, 3 * U, 10**12, 86_400, 86_400)
-    assert m.mint("m", 1, 100, 0, 10) == (0, U)
-    assert m.mint("m", 2, 100, 0, 20) == (0, U)
-    assert m.mint("m", 3, 100, 0, 30) == (0, U)
-    assert m.mint("m", 4, 100, 0, 40) == (0, 0)                 # budget exhausted
-    assert m.mint("m", 5, 100, 0, 86_400 + 1) == (0, U)         # new epoch
+    m.set_params(20, 86_400, 2 * U, 10**12, 86_400, 86_400)    # budget 2, 1 for large notes
+    m.s.policy["reserve_bps"] = 5000
+    assert m.mint("m", 1, 100, 0, 10) == (0, U // 5)
+    assert m.mint("m", 2, 500, 0, 20) == (0, 0)                 # 0.2 + 1 > 1 large share
+    assert m.mint("m", 3, 5, 0, 30) == (0, U // 100 + U // 4)  # small notes still credited
+    assert m.mint("m", 4, 5, 10**9, 40) == (0, 0)               # 2 + 0.26 > remaining budget
+    assert m.mint("m", 5, 100, 0, 86_400 + 1) == (0, U // 5)    # new epoch
     m.check_invariants()
+
+
+# PR #20 / docs/11 §7.2 spec table with UNIT = 1e18 (same numbers as the Foundry test)
+E18 = 10**18
+TABLE = [(5, 2 * E18, 26 * E18 // 100), (10, 3 * E18, 27 * E18 // 100),
+         (20, 3 * E18, 29 * E18 // 100), (50, 3 * E18, E18 // 10), (100, 3 * E18, E18 // 5),
+         (200, 3 * E18, 2 * E18 // 5), (500, 3 * E18, E18)]
+
+
+def mk18():
+    bank = DictBank({"m": 10**30, "funder": 10**30})
+    m = NotesModule.genesis(E18, 77, bank, lambda p, s: p == {"ok": True})
+    m.fund_pool("funder", 10**24)
+    m.set_params(100, 86_400, 10**30, 5_000_000 * E18, 30 * 86_400, 30 * 86_400)
+    return m, bank
+
+
+@pytest.mark.parametrize("d,want_c,want_r", TABLE)
+def test_default_schedule_all_denominations(d, want_c, want_r):
+    m, bank = mk18()
+    c, r = m.mint("m", 1, d, 2**256, 0)
+    assert (c, r) == (want_c, want_r)
+    assert c + r <= d * E18 * 6000 // 10_000
+    m.check_invariants()
+
+
+def test_honest_cost_is_paid_not_cap():
+    m, _ = mk18()
+    assert m.mint("m", 1, 5, 15 * E18 // 10, 0) == (15 * E18 // 10, 26 * E18 // 100)
+
+
+def test_rearm_no_cost_reward_after_circulation():
+    m, _ = mk18()
+    m.mint("m", 1, 100, 2**256, 0)
+    m.deposit(1, 11, "bob", {"ok": True}, 0)
+    assert m.rearm("m", 1, 2**256, 0) == (0, 0)                 # < 7 days since era start
+    m.deposit(1, 12, "bob", {"ok": True}, 0)
+    assert m.rearm("m", 1, 2**256, 7 * 86_400) == (0, E18 // 5)  # rho*V, no small bonus
+    m.check_invariants()
+
+
+def test_small_note_reserve_survives_large_mints():
+    m, _ = mk18()
+    m.set_params(100, 86_400, 10 * E18, 5_000_000 * E18, 30 * 86_400, 30 * 86_400)
+    assert sum(m.mint("m", 1, 500, 2**256, 0)) == 4 * E18
+    assert sum(m.mint("m", 2, 500, 2**256, 0)) == 0
+    assert sum(m.mint("m", 3, 5, 2**256, 0)) == 226 * E18 // 100
+    m.check_invariants()
+
+
+def test_missing_policy_fails_closed_to_one_to_one():
+    m, _ = mk18()
+    m.s.policy = {}
+    assert m.mint("m", 1, 5, 2**256, 0) == (0, 0)
+
+
+def test_cost_policy_hard_bounds():
+    m, _ = mk18()
+    for args in ((5001, 0, 0, 0, 7 * 86_400), (0, 10 * E18 + 1, 0, 0, 7 * 86_400),
+                 (0, 0, E18 + 1, 0, 7 * 86_400), (0, 0, 0, 8001, 7 * 86_400),
+                 (0, 0, 0, 0, 86_399), (0, 0, 0, 0, 90 * 86_400 + 1)):
+        with pytest.raises(NoteError, match="OUT_OF_BOUNDS"):
+            m.set_cost_policy(*args)
+    with pytest.raises(NoteError, match="OUT_OF_BOUNDS"):
+        m.set_cost_policy(4000, 0, 0, 0, 7 * 86_400, reward_bps=101)
+
+
+def test_governance_moves_policy_within_bounds():
+    from tcl.node.chain import ChainState
+    d = ChainState.genesis("c", ["aa" * 32], {}, 1, 0, 1, 0, 1, E18)
+    cs = ChainState(d, "c", DictBank({"m": 10**30, "f": 10**30}))
+    cs.notes.fund_pool("f", 10**24)
+    cs.gov.s.params["SMALL_BONUS_MILLI"] = 500
+    cs._sync_note_policy()
+    assert cs.notes.mint("m", 1, 5, 2**256, 0)[1] == 51 * E18 // 100
+    with pytest.raises(Exception, match="OUT_OF_BOUNDS"):
+        cs.gov.propose("COST_CAP_BPS", 5500, 0)                 # above hard 50%
 
 
 def test_states_era_nullifiers_and_rearm():
@@ -77,9 +155,9 @@ def test_states_era_nullifiers_and_rearm():
 
 def test_cost_cap_hard_bound():
     m, _ = mk()
-    m.set_denomination(100, True, 100 * U * 2000 // 10_000)     # exactly 20%: ok
+    m.set_denomination(100, True, 100 * U * 5000 // 10_000)     # exactly 50%: ok
     with pytest.raises(NoteError, match="OUT_OF_BOUNDS"):
-        m.set_denomination(100, True, 100 * U * 2000 // 10_000 + 1)
+        m.set_denomination(100, True, 100 * U * 5000 // 10_000 + 1)
     with pytest.raises(NoteError):
         m.set_params(101, 86_400, 0, 1, 86_400, 86_400)          # reward > 1%
 

@@ -10,7 +10,10 @@ import pytest
 from tcl.consensus.types import verify_commit
 from tcl.consensus.validators import Reject as VReject
 from tcl.localnet import Genesis, Localnet
-from tcl.node.chain import ChainState, epoch_seed
+import hashlib
+
+from tcl.consensus import vrf
+from tcl.node.chain import ChainState
 from tcl.node.encoding_helpers import anon_nullifier
 
 FX = Path(__file__).resolve().parents[1] / "test/contracts/fixtures"
@@ -21,7 +24,10 @@ def acct(net, i):
 
 
 def rc(net, h=None):
-    return net.get_block(net.height if h is None else h)["receipts"]
+    """Receipts of user txs (drops the automatic beacon reveal and block-end entries)."""
+    b = net.get_block(net.height if h is None else h)
+    skip = {r["tx_id"] for t, r in zip(b["txs"], b["receipts"]) if t["method"] == "beacon"}
+    return [r for r in b["receipts"] if r["tx_id"] not in skip | {"block-end"}]
 
 
 def test_double_sign_gossiped_slashed_and_banned(tmp_path):
@@ -32,7 +38,7 @@ def test_double_sign_gossiped_slashed_and_banned(tmp_path):
     slashed = None
     for _ in range(6):
         net.mine()
-        for r in rc(net):
+        for r in net.get_block(net.height)["receipts"]:
             for e in r.get("events", []):
                 if e["type"] == "slashed":
                     slashed = e
@@ -55,7 +61,7 @@ def test_double_sign_gossiped_slashed_and_banned(tmp_path):
     with pytest.raises(VReject, match="UNAUTHORIZED"):
         cs.reg.opt_in(n, "ab" * 32, bond)
     # replaying the same evidence is rejected
-    ev_tx = next(t for b in net.blocks for t in b.txs if t["module"] == "consensus")
+    ev_tx = next(t for b in net.blocks for t in b.txs if t["method"] == "evidence")
     net.send_tx(ev_tx)
     net.mine()
     assert rc(net)[0]["code"] == "NULLIFIER_SPENT"
@@ -75,19 +81,27 @@ def test_forged_evidence_rejected(tmp_path):
     net.close()
 
 
-def test_epoch_rotation_seed_from_commit_cert(tmp_path):
+def test_epoch_rotation_vrf_beacon(tmp_path):
     g = Genesis(validators=6, seats=4, epoch_blocks=3, term_epochs=1, cooldown_epochs=1,
                 dev_accounts=1)
     net = Localnet(tmp_path / "ep", g)
     assert len(net.vals_sorted) == 4
     sets = [tuple(net.vals_sorted)]
-    for _ in range(3):
+    for e in range(1, 4):
+        prev = net.chain_state()["beacon"]
         net.mine(3)
         b = net.blocks[-1]
-        ev = next(e for r in b.receipts if r["tx_id"] == "block-end"
-                  for e in r["events"] if e["type"] == "epoch")
-        # anyone can recompute the seed from the block's previous-commit certificate
-        assert ev["seed"] == epoch_seed(b.header["height"], b.last_commit).hex()
+        evs = [x for blk in net.blocks[-3:] for r in blk.receipts for x in r.get("events", [])]
+        ev = next(x for x in evs if x["type"] == "epoch")
+        rev = next(x for x in evs if x["type"] == "beacon_reveal")
+        # anyone can check the leader's VRF proof and recompute the seed
+        tx = next(t for blk in net.blocks[-3:] for t in blk.txs if t["method"] == "beacon")
+        alpha = b"tcl-beacon" + net.chain_id.encode() + (e - 1).to_bytes(8, "big") + \
+            bytes.fromhex(prev["seed"])
+        beta = vrf.verify(bytes.fromhex(prev["leader"]), alpha, bytes.fromhex(tx["args"]["pi"]))
+        assert beta is not None and beta.hex() == rev["beta"]
+        assert ev["seed"] == hashlib.sha256(bytes.fromhex(prev["seed"]) + e.to_bytes(8, "big")
+                                            + beta).hexdigest()
         assert verify_commit(b.last_commit, net.chain_id, net.valset_at(b.header["height"] - 1))
         sets.append(tuple(net.vals_sorted))
         assert len(net.vals_sorted) == 4
@@ -161,7 +175,7 @@ def test_notes_and_governance_in_localnet(tmp_path):
     net.dev_send(a, "mint", {"id": 7, "denom": 100, "cost": 10**12}, module="notes")
     net.mine()
     ev = rc(net)[1]["events"][0]
-    assert ev["cost"] == 100 * u * 5 // 1000 and ev["reward"] == u
+    assert ev["cost"] == 3 * u and ev["reward"] == u // 5    # c_abs binds; rho = 0.2%
     before = net.get_account(b)["balance"]
     net.send_tx({"chain_id": net.chain_id, "module": "notes", "method": "deposit",
                  "sender": None, "nonce": 0, "proof": {"dev": True}, "sig": None,
@@ -184,4 +198,72 @@ def test_notes_and_governance_in_localnet(tmp_path):
     hdr = net.blocks[-1].header
     assert hdr["aux_roots"]["governance"] != net.blocks[0].header["aux_roots"]["governance"]
     assert net.verify()
+    net.close()
+
+
+def test_beacon_forged_or_withheld(tmp_path):
+    g = Genesis(validators=4, epoch_blocks=3, dev_accounts=1)
+    net = Localnet(tmp_path / "bw", g, consensus="fast")
+    b0 = net.chain_state()["beacon"]
+    other = next(v for v in net.validators if v.id != b0["leader"])
+    alpha = b"tcl-beacon" + net.chain_id.encode() + (0).to_bytes(8, "big") + \
+        bytes.fromhex(b0["seed"])
+    forged = vrf.prove(other.secret, alpha).hex()          # valid VRF, wrong key
+    leader = next(v for v in net.validators if v.id == b0["leader"])
+    leader.byzantine = True                                 # leader withholds its reveal
+    net.send_tx({"chain_id": net.chain_id, "module": "consensus", "method": "beacon",
+                 "sender": None, "nonce": 0, "proof": None, "sig": None, "pow_stamp": 0,
+                 "args": {"epoch": 0, "pi": forged}})
+    leader.byzantine = False
+    leader.online = False
+    net.mine(3)
+    assert net.get_block(1)["receipts"][0]["code"] == "BAD_PROOF"
+    evs = [x for b in net.blocks for r in b.receipts for x in r.get("events", [])]
+    miss = next(x for x in evs if x["type"] == "beacon_missed")
+    assert miss["validator"] == leader.id and miss["slashed"] == g.validator_bond // 10
+    st = net.chain_state()
+    assert st["reg"]["slashed_pool"] == g.validator_bond // 10
+    exp = hashlib.sha256(bytes.fromhex(b0["seed"]) + (1).to_bytes(8, "big") + b"missed")
+    assert st["beacon"]["seed"] == exp.hexdigest()
+    net.close()
+
+
+def test_governed_demurrage_applies_from_next_epoch(tmp_path):
+    from tcl.ledger.demurrage_fixed import SCALE
+    from tcl.node import demurrage
+    g = Genesis(validators=4, dev_accounts=3, epoch_blocks=10)
+    net = Localnet(tmp_path / "dm", g, consensus="fast")
+    a, b, w = acct(net, 0), acct(net, 1), "whale"
+    net.faucet(w, 2_000_000 * SCALE)                     # below default T=5M: no decay
+    steps = [(a, "propose", {"key": "DEMURRAGE_THRESHOLD_TCL", "value": 1_000_000}),
+             (a, "vote", {"id": 1}), (b, "vote", {"id": 1})]
+    for who, m, args in steps:
+        net.dev_send(who, m, args, module="governance")
+        net.mine()
+        assert rc(net)[-1]["ok"], rc(net)
+    net.warp(8 * 86_400)
+    net.dev_send(a, "queue", {"id": 1}, module="governance")
+    net.mine()
+    assert rc(net)[0]["ok"], rc(net)
+    net.warp(3 * 86_400)
+    net.dev_send(a, "execute", {"id": 1}, module="governance")
+    net.mine()
+    assert rc(net)[0]["ok"], rc(net)
+    assert net.chain_state()["gov"]["params"]["DEMURRAGE_THRESHOLD_TCL"] == 1_000_000
+    assert "demurrage_active" not in net.chain_state()    # not mid-epoch
+    assert net.get_account(w)["balance"] == 2_000_000 * SCALE
+    while net.height % 10:
+        net.mine()
+    act = net.chain_state()["demurrage_active"]
+    assert act == {"rate": 500, "threshold": 1_000_000 * SCALE}
+    t_last = net.get_account(w)["last_update"]
+    net.warp(30 * 86_400)
+    net.dev_send(a, "settle", {"account": w})
+    net.mine()
+    dt = net.blocks[-1].header["time"] - t_last
+    want = demurrage.apply(2_000_000 * SCALE, dt, 500, 1_000_000 * SCALE)[0]
+    assert net.get_account(w)["balance"] == want < 2_000_000 * SCALE
+    assert net.verify()
+    with pytest.raises(ValueError):
+        demurrage.make_rule(5_000, 1_000_000 * SCALE)          # outside hard bounds
     net.close()

@@ -183,6 +183,9 @@ class Validator:
                  evidence: list) -> list[dict]:
         L = self.ledger
         a = tx.args
+        if tx.module == "consensus" and tx.method == "beacon":
+            # unsigned: self-authenticating ECVRF proof by the epoch's beacon leader
+            return st.apply("consensus", "beacon", None, a, None, now)
         if tx.module == "consensus" and tx.method == "evidence":
             # unsigned: self-authenticating (two Ed25519-signed conflicting votes)
             ev = st.check_evidence(a)
@@ -257,6 +260,7 @@ class Validator:
         Caller owns the outer transaction. Sets self.last_aux / self.last_next_vals."""
         receipts = []
         st = self.chain(now)
+        self.ledger.decay_override = st.demurrage_rule()  # epoch-scoped governed demurrage
         evidence: list = []
         for tx in txs:
             snap = json.dumps(st.save())
@@ -596,6 +600,7 @@ class Localnet:
         txs, self.mempool = self.mempool, []
         user_txs = list(txs)
         txs = txs + self._evidence_txs()  # gossiped double-sign evidence, applied at block end
+        txs = txs + self._beacon_txs()
         self.time += self.genesis.block_time
         live = [v for v in self.validators if v.online]
         try:
@@ -780,6 +785,23 @@ class Localnet:
         for peer in engines:
             if peer != dst and peer not in byz:
                 push(now + 1, "evidence", peer, args)
+
+    def _beacon_txs(self) -> list[Tx]:
+        """Validator behaviour: the epoch's beacon leader (if it is a live, honest local node)
+        publishes its ECVRF proof. A byzantine/offline leader withholds -> penalised."""
+        if not self.blocks:
+            return []
+        st = ChainState(self.chain_state(), self.chain_id, None)
+        pend = st.beacon_pending()
+        if pend is None:
+            return []
+        leader, epoch, alpha = pend
+        v = next((x for x in self.validators if x.id == leader), None)
+        if v is None or not v.online or v.byzantine:
+            return []
+        from ..consensus import vrf
+        return [Tx(self.chain_id, "consensus", "beacon", None, 0,
+                   {"epoch": epoch, "pi": vrf.prove(v.secret, alpha).hex()})]
 
     def _evidence_txs(self) -> list[Tx]:
         """Proposer-side inclusion: verified pooled evidence not yet processed on-chain."""

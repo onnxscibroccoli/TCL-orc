@@ -22,7 +22,13 @@ from .bn254 import R as FIELD_P
 
 MAX_DENOM = 500
 MAX_REWARD_BPS = 100
-MAX_COST_BPS = 2000
+MAX_COST_BPS = 5000          # gamma_c <= 50% of face (hard)
+MAX_CREDIT_BPS = 6000        # cost + reward <= 60% of face per mint (hard)
+MAX_SMALL_RESERVE_BPS = 8000
+SMALL_DENOM_MAX = 20         # 5, 10, 20 are "small everyday notes"
+MAX_COST_ABS_FACE = 10
+MAX_SMALL_BONUS_FACE = 1
+MIN_CIRC_LOW, MIN_CIRC_HIGH = 86_400, 90 * 86_400
 DAY = 86_400
 MIN_WINDOW, MAX_WINDOW = DAY, 365 * DAY
 DEFAULT_DENOMS = (5, 10, 20, 50, 100, 200, 500)
@@ -64,6 +70,9 @@ class NotesState:
     epoch_budget: int = 0
     current_epoch: int = 0
     spent_in_epoch: int = 0
+    spent_large_in_epoch: int = 0
+    # cost-credit policy (PR #20 / docs/11 §7.2); in-chain it is overwritten from governance
+    policy: dict = field(default_factory=dict)
     theta: int = 0
     agg_window: int = 30 * DAY
     release_window: int = 30 * DAY
@@ -86,9 +95,30 @@ class NotesModule:
         s = NotesState(unit=unit, context=context)
         m = cls(s, bank, verify_proof, **kw)
         for d in DEFAULT_DENOMS:
-            m.set_denomination(d, True, d * unit * 5 // 1000)  # 0.5% default cap (as contract)
+            m.set_denomination(d, True, d * unit * MAX_COST_BPS // 10_000)  # as contract (#20)
         m.set_params(100, DAY, 1_000 * unit, 5_000_000 * unit, 30 * DAY, 30 * DAY)
+        m.set_cost_policy(4000, 3 * unit, unit // 4, 5000, 7 * DAY, reward_bps=20)
         return m
+
+    def set_cost_policy(self, cost_bps: int, cost_abs: int, bonus: int, reserve_bps: int,
+                        min_circ: int, reward_bps: int | None = None) -> None:
+        u = self.s.unit
+        if not (0 <= cost_bps <= MAX_COST_BPS and 0 <= cost_abs <= MAX_COST_ABS_FACE * u and
+                0 <= bonus <= MAX_SMALL_BONUS_FACE * u and 0 <= reserve_bps <=
+                MAX_SMALL_RESERVE_BPS and MIN_CIRC_LOW <= min_circ <= MIN_CIRC_HIGH):
+            raise NoteError("OUT_OF_BOUNDS", "cost policy")
+        rb = self.s.reward_bps if reward_bps is None else reward_bps
+        if not 0 <= rb <= MAX_REWARD_BPS:
+            raise NoteError("OUT_OF_BOUNDS", "reward")
+        self.s.policy = {"reward_bps": rb, "cost_bps": cost_bps, "cost_abs": cost_abs,
+                         "bonus": bonus, "reserve_bps": reserve_bps, "min_circ": min_circ}
+
+    def policy(self) -> dict:
+        p = self.s.policy
+        if not p:  # fail closed: no policy -> zero credit, zero reward (pure 1:1)
+            return {"reward_bps": 0, "cost_bps": 0, "cost_abs": 0, "bonus": 0,
+                    "reserve_bps": 0, "min_circ": MIN_CIRC_HIGH}
+        return p
 
     # --- params (governance-only callers) --------------------------------------------------
     def set_denomination(self, d: int, allowed: bool, cap: int) -> None:
@@ -120,13 +150,45 @@ class NotesModule:
         return d * self.s.unit
 
     def quote(self, d: int, attested: int, now: int) -> tuple[int, int]:
-        s = self.s
-        cap = s.denoms[str(d)][1]
-        cost = min(attested, cap)
-        reward = self.face(d) * s.reward_bps // 10_000
-        spent = s.spent_in_epoch if now // s.epoch_length == s.current_epoch else 0
-        if cost + reward > s.pool or spent + cost + reward > s.epoch_budget:
+        return self._quote(d, attested, False, True, now)
+
+    def quote_rearm(self, nid: int, now: int) -> tuple[int, int]:
+        n = self.s.notes[str(nid)]
+        eligible = now >= n["mint_time"] + self.policy()["min_circ"]
+        return self._quote(n["denom"], 0, True, eligible, now)
+
+    def _quote(self, d: int, attested: int, is_rearm: bool, eligible: bool,
+               now: int) -> tuple[int, int]:
+        """Port of NoteController._quote (PR #20): credit = min(claimed, cap_d, gamma*V, c_abs);
+        reward = rho*V (+ b_small on first mint of 5/10/20); total <= 60% V; re-arm: no cost
+        credit, reward only if the era circulated >= min_circ; 1:1 fallback if the pool, the
+        epoch budget, or (for large notes) the non-reserved budget share can't cover it."""
+        s, p = self.s, self.policy()
+        v = self.face(d)
+        small = d <= SMALL_DENOM_MAX
+        cost = reward = 0
+        if not is_rearm:
+            cost = min(attested, s.denoms[str(d)][1], v * p["cost_bps"] // 10_000,
+                       p["cost_abs"])
+        if eligible:
+            reward = v * p["reward_bps"] // 10_000
+            if small and not is_rearm:
+                reward += p["bonus"]
+        mx = v * MAX_CREDIT_BPS // 10_000
+        if cost + reward > mx:
+            reward = 0 if cost >= mx else mx - cost
+            cost = min(cost, mx)
+        total = cost + reward
+        if total == 0:
             return 0, 0
+        same = now // s.epoch_length == s.current_epoch
+        spent = s.spent_in_epoch if same else 0
+        if total > s.pool or spent + total > s.epoch_budget:
+            return 0, 0
+        if not small:
+            spent_l = s.spent_large_in_epoch if same else 0
+            if spent_l + total > s.epoch_budget * (10_000 - p["reserve_bps"]) // 10_000:
+                return 0, 0
         return cost, reward
 
     def mint(self, minter: str, nid: int, d: int, attested: int, now: int) -> tuple[int, int]:
@@ -138,9 +200,10 @@ class NotesModule:
             raise NoteError("BAD_DENOM")
         if not isinstance(attested, int) or attested < 0:
             raise NoteError("BAD_ARGS")
-        out = self._burn_and_credit(minter, d, attested, now)
+        cost, reward = self.quote(d, attested, now)
+        self._burn_and_credit(minter, d, cost, reward, now)
         self.s.notes[str(nid)] = {"denom": d, "era": 0, "mint_time": now, "state": LIVE}
-        return out
+        return cost, reward
 
     def rearm(self, minter: str, nid: int, attested: int, now: int) -> tuple[int, int]:
         n = self.s.notes.get(str(nid))
@@ -148,29 +211,28 @@ class NotesModule:
             raise NoteError("BAD_STATE")
         if not self.s.denoms.get(str(n["denom"]), [False])[0]:
             raise NoteError("BAD_DENOM")
-        if not isinstance(attested, int) or attested < 0:
-            raise NoteError("BAD_ARGS")
-        out = self._burn_and_credit(minter, n["denom"], attested, now)
+        cost, reward = self.quote_rearm(nid, now)  # previous era's mint_time; claim ignored
+        self._burn_and_credit(minter, n["denom"], cost, reward, now)
         n.update(era=n["era"] + 1, state=LIVE, mint_time=now)
-        return out
+        return cost, reward
 
-    def _burn_and_credit(self, minter: str, d: int, attested: int, now: int):
+    def _burn_and_credit(self, minter: str, d: int, cost: int, reward: int, now: int) -> None:
         s = self.s
         v = self.face(d)
         self.bank.debit(minter, v)  # raises before any module mutation if insufficient
         e = now // s.epoch_length
         if e != s.current_epoch:
-            s.current_epoch, s.spent_in_epoch = e, 0
-        cost, reward = self.quote(d, attested, now)
+            s.current_epoch, s.spent_in_epoch, s.spent_large_in_epoch = e, 0, 0
         credit = cost + reward
         s.physical_outstanding += v
         s.escrow += v
         if credit:
             s.pool -= credit
             s.spent_in_epoch += credit
+            if d > SMALL_DENOM_MAX:
+                s.spent_large_in_epoch += credit
             s.escrow -= credit
             self.bank.credit(minter, credit)
-        return cost, reward
 
     # --- deposit -----------------------------------------------------------------------------
     def deposit(self, nid: int, nf: int, recipient, proof: dict, now: int) -> tuple[int, int]:

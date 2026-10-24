@@ -18,13 +18,23 @@ def lambda_scaled(rate_ppm_day: int) -> int:
     return F.LAMBDA_SCALED * rate_ppm_day // DEFAULT_PPM
 
 
-def apply(balance: int, dt: int, rate_ppm_day: int = DEFAULT_PPM) -> tuple[int, int]:
+DEFAULT_THRESHOLD = F.T
+RATE_BOUNDS = (100, 1_000)                                # ppm/day, hard
+THRESHOLD_BOUNDS = (1_000_000 * F.SCALE, 50_000_000 * F.SCALE)  # base units, hard
+
+
+def apply(balance: int, dt: int, rate_ppm_day: int = DEFAULT_PPM,
+          threshold: int = DEFAULT_THRESHOLD) -> tuple[int, int]:
     """Return (new_balance, extracted). Extracted value goes to the vault; nothing is created or
-    destroyed (new_balance + extracted == balance)."""
-    if rate_ppm_day == DEFAULT_PPM:
+    destroyed (new_balance + extracted == balance). Out-of-bounds params raise (fail-closed)."""
+    if not RATE_BOUNDS[0] <= rate_ppm_day <= RATE_BOUNDS[1] or \
+            not THRESHOLD_BOUNDS[0] <= threshold <= THRESHOLD_BOUNDS[1]:
+        raise ValueError("demurrage parameters out of hard bounds")
+    if rate_ppm_day == DEFAULT_PPM and threshold == F.T:
         return F.apply_demurrage_fixed(balance, dt)
     lam = lambda_scaled(rate_ppm_day)
-    if balance <= F.T or dt <= 0:
+    T = threshold
+    if balance <= T or dt <= 0:
         return balance, 0
     cur, out, rem = balance, 0, dt
     while rem > 0:  # same loop as apply_demurrage_fixed, with the governed lambda
@@ -32,7 +42,15 @@ def apply(balance: int, dt: int, rate_ppm_day: int = DEFAULT_PPM) -> tuple[int, 
         mult = F._taylor_multiplier(lam * step)
         if step >= 86_400:
             mult = max(0, mult - 55)
-        surplus = cur - F.T
+        surplus = cur - T
         fee = surplus - surplus * mult // F.SCALE
         cur, out, rem = cur - fee, out + fee, rem - step
     return cur, out
+
+
+def make_rule(rate_ppm_day: int, threshold: int):
+    """Ledger decay_override for governed params; None when equal to the ledger default."""
+    apply(0, 0, rate_ppm_day, threshold)  # bounds check, fail-closed
+    if rate_ppm_day == DEFAULT_PPM and threshold == F.T:
+        return None
+    return lambda bal, dt: apply(bal, dt, rate_ppm_day, threshold)

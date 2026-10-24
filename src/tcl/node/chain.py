@@ -9,12 +9,12 @@ Validator-set rules (docs/13, 13a):
     BLOCK END (after all ordinary txs): bond slashed into slashed_pool, seat removed, personhood
     nullifier banned for good (it can never re-enrol, with any key).
   * epochs: at the end of every height h with h % epoch_blocks == 0 the registry advances one
-    epoch: terms expire into cooldown and seats are refilled by a seeded draw. The seed is
-    sha256("tcl-epoch-seed" || h || sha256(sigs of block h's last_commit, sorted by validator)),
-    i.e. derived from the previous commit certificate, so anyone holding the certificate can
-    recompute and check it. CAVEAT: the proposer chooses which >2/3 subset of precommits to
-    include, giving it limited grinding power over the seed; a VRF/threshold beacon should replace
-    this before mainnet.
+    epoch: terms expire into cooldown and seats are refilled by a seeded draw. The seed comes
+    from an ECVRF beacon (RFC 9381): seed_e = SHA256(seed_{e-1} || e || beta), where beta is the
+    VRF output of the epoch's leader (drawn from seed_{e-1}) over seed_{e-1}. A VRF output is
+    unique per (key, input), so neither the leader nor any block proposer can grind it; the
+    only residual choice is the leader withholding, which yields a fixed fallback seed and costs
+    the leader 10% of its bond plus its seat.
   * liveness override: if expiry would leave fewer seats than N and there are no other eligible
     candidates, just-expired members are re-seated (cooldown waived) by the same seeded draw
     rather than halting the chain. The override is recorded in the epoch event.
@@ -67,13 +67,6 @@ class DictPersonhood:
         return n in self.tiers
 
 
-def epoch_seed(height: int, last_commit: Optional[dict]) -> bytes:
-    sigs = sorted((s["validator"], s.get("sig") or "") for s in
-                  (last_commit or {}).get("sigs", []))
-    agg = hashlib.sha256(json.dumps(sigs, separators=(",", ":")).encode()).digest()
-    return hashlib.sha256(b"tcl-epoch-seed" + height.to_bytes(8, "big") + agg).digest()
-
-
 def evidence_from_args(a: dict) -> DuplicateVoteEvidence:
     try:
         va, vb = (Vote(d["kind"], d["height"], d["round"], d["block_hash"], d["validator"],
@@ -122,7 +115,9 @@ class ChainState:
             d["reg"]["bonded"] += bond
         d["notes"] = _genesis_notes(chain_id, unit)
         st = ChainState(d, chain_id, bank=None)
-        st._advance(0, hashlib.sha256(b"tcl-genesis-seed" + chain_id.encode()).digest(), 0)
+        seed0 = hashlib.sha256(b"tcl-genesis-seed" + chain_id.encode()).digest()
+        st._advance(0, seed0, 0)
+        st._new_beacon(0, seed0)
         st.save()
         return st.d
 
@@ -227,7 +222,61 @@ class ChainState:
             return [{"type": "enroll", "nullifier": n, "key": key}]
         if method == "evidence":
             return []  # applied at block end (see end_block)
+        if method == "beacon":
+            beta = self.check_beacon(a)
+            self.d["beacon"]["beta"] = beta.hex()
+            return [{"type": "beacon_reveal", "epoch": a["epoch"], "beta": beta.hex()}]
         raise ModuleReject("UNKNOWN_METHOD", method)
+
+    # --- randomness beacon (ECVRF, RFC 9381) ----------------------------------------------
+    def beacon_alpha(self, epoch: int, seed_hex: str) -> bytes:
+        return b"tcl-beacon" + self.chain_id.encode() + epoch.to_bytes(8, "big") + \
+            bytes.fromhex(seed_hex)
+
+    def _new_beacon(self, epoch: int, seed: bytes) -> None:
+        keys = self.validator_keys()
+        leader = draw_without_replacement(seed + b"leader", keys, 1)
+        self.d["beacon"] = {"epoch": epoch, "seed": seed.hex(), "beta": None,
+                            "leader": leader[0] if leader else None}
+
+    def beacon_pending(self) -> Optional[tuple]:
+        b = self.d["beacon"]
+        if b["beta"] is None and b["leader"]:
+            return b["leader"], b["epoch"], self.beacon_alpha(b["epoch"], b["seed"])
+        return None
+
+    def check_beacon(self, a: dict) -> bytes:
+        from ..consensus import vrf
+        b = self.d["beacon"]
+        if a.get("epoch") != b["epoch"] or b["beta"] is not None or not b["leader"]:
+            raise ModuleReject("BAD_ARGS", "no beacon reveal pending for that epoch")
+        try:
+            pi = bytes.fromhex(a.get("pi", ""))
+        except (TypeError, ValueError):
+            raise ModuleReject("BAD_PROOF") from None
+        beta = vrf.verify(bytes.fromhex(b["leader"]), self.beacon_alpha(b["epoch"], b["seed"]), pi)
+        if beta is None:
+            raise ModuleReject("BAD_PROOF", "VRF proof invalid")
+        return beta
+
+    def _next_seed(self, epoch: int) -> tuple[bytes, list]:
+        """seed_{e} = SHA256(seed_{e-1} || e || beta_leader). Missed reveal: fallback seed and
+        the leader is penalised (10% bond slashed, seat lost)."""
+        b, ev = self.d["beacon"], []
+        prev = bytes.fromhex(b["seed"])
+        if b["beta"] is not None:
+            return hashlib.sha256(prev + epoch.to_bytes(8, "big") +
+                                  bytes.fromhex(b["beta"])).digest(), ev
+        if b["leader"]:
+            n = self.reg.nullifier_of(b["leader"])
+            if n is not None:
+                c = self.reg.candidates[n]
+                cut = c.bond // 10
+                c.bond -= cut
+                self.reg.slashed_pool += cut
+                self.reg.seats.pop(n, None)
+                ev.append({"type": "beacon_missed", "validator": b["leader"], "slashed": cut})
+        return hashlib.sha256(prev + epoch.to_bytes(8, "big") + b"missed").digest(), ev
 
     def check_evidence(self, a: dict) -> DuplicateVoteEvidence:
         ev = evidence_from_args(a)
@@ -245,7 +294,7 @@ class ChainState:
         if sender is None and method != "deposit":
             raise ModuleReject("UNAUTHORIZED")
         m = self.notes
-        m.s.reward_bps = self.gov.get("MINT_REWARD_BPS")
+        self._sync_note_policy()
         if method == "mint":
             c, r = m.mint(sender, a.get("id"), a.get("denom"), a.get("cost", 0), now)
             return [{"type": "note_mint", "id": str(a["id"]), "cost": c, "reward": r}]
@@ -265,6 +314,25 @@ class ChainState:
         if method == "release":
             return [{"type": "released", "amount": m.release(sender, now)}]
         raise ModuleReject("UNKNOWN_METHOD", method)
+
+    def _sync_note_policy(self) -> None:
+        """Policy is read from the native registry each call (as NoteController.registryPolicy);
+        any failure fails closed to zero credit/zero reward (pure 1:1)."""
+        g, u = self.gov, self.notes.s.unit
+        try:
+            self.notes.set_cost_policy(g.get("COST_CAP_BPS"), g.get("COST_CAP_ABS_MILLI") * u // 1000,
+                                       g.get("SMALL_BONUS_MILLI") * u // 1000,
+                                       g.get("SMALL_RESERVE_BPS"), g.get("MIN_CIRCULATION"),
+                                       reward_bps=g.get("MINT_REWARD_BPS"))
+        except (KeyError, NoteError):
+            self.notes.s.policy = {}
+
+    def demurrage_rule(self):
+        """Ledger decay rule in force for this epoch (snapshotted at the last epoch boundary)."""
+        from . import demurrage
+        a = self.d.get("demurrage_active") or {}
+        return demurrage.make_rule(a.get("rate", demurrage.DEFAULT_PPM),
+                                   a.get("threshold", demurrage.DEFAULT_THRESHOLD))
 
     def _gov(self, method: str, sender: Optional[str], a: dict, now: int) -> list[dict]:
         if sender is None:
@@ -299,7 +367,18 @@ class ChainState:
                         "bond": self.reg.params.VALIDATOR_BOND, "banned": True})
         eb = self.reg.params.EPOCH_BLOCKS
         if eb > 0 and height > 0 and height % eb == 0:
-            out.append(self._advance(height // eb, epoch_seed(height, last_commit), height))
+            e = height // eb
+            seed, missed = self._next_seed(e)
+            out += missed
+            out.append(self._advance(e, seed, height))
+            self._new_beacon(e, seed)
+            # governed demurrage takes effect from the next epoch (never mid-epoch)
+            from ..ledger.demurrage_fixed import SCALE
+            act = {"rate": self.gov.get("DEMURRAGE_RATE_PPM_DAY"),
+                   "threshold": self.gov.get("DEMURRAGE_THRESHOLD_TCL") * SCALE}
+            if act != self.d.get("demurrage_active"):
+                self.d["demurrage_active"] = act
+                out.append({"type": "demurrage_params", **act})
         self.save()
         keys = self.validator_keys()
         hist = self.d["valset_hist"]
