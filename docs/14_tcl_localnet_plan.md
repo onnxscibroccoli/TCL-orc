@@ -125,7 +125,7 @@ The localnet itself (`src/tcl/localnet/*`) imports **only the stdlib and `tcl`**
 `test_localnet_stdlib_only`. A running localnet therefore needs only Python plus the `tcl` package's
 own runtime wheels, and not even those via `python -m tcl.localnet`.
 
-### Offline bundle (plan)
+### Offline bundle (implemented, see docs/OFFLINE.md and docs/DECISIONS.md D-OFF-1..6)
 ```
 vendor/
   store/sha256/<hex>          # content-addressed blobs (wheels, tarballs, binaries, zkeys)
