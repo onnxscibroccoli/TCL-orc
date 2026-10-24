@@ -5,6 +5,8 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
+from ..consensus import ed25519
+
 DEFAULT_GENESIS_TIME = 1_767_225_600  # 2026-01-01T00:00:00Z, fixed for determinism
 
 
@@ -33,23 +35,33 @@ class Genesis:
         if self.block_time <= 0:
             raise ValueError("block_time must be positive")
 
+    def dev_secret(self, i: int) -> bytes:
+        """DEV ONLY: deterministic Ed25519 seed for dev account i (public, never use for value)."""
+        return hashlib.sha256(f"{self.seed}/dev/{i}".encode()).digest()
+
+    def validator_secret(self, i: int) -> bytes:
+        """DEV ONLY: deterministic Ed25519 seed for validator i."""
+        return hashlib.sha256(f"{self.seed}/val/{i}".encode()).digest()
+
+    def dev_keys(self) -> dict[str, bytes]:
+        """address (Ed25519 pubkey hex) -> secret, for the generated dev accounts."""
+        return {ed25519.public_key(self.dev_secret(i)).hex(): self.dev_secret(i)
+                for i in range(self.dev_accounts)}
+
     def dev_account_list(self) -> list[DevAccount]:
-        if self.accounts:
-            return list(self.accounts)
-        out = []
-        for i in range(self.dev_accounts):
-            h = hashlib.sha256(f"{self.seed}/dev/{i}".encode()).hexdigest()[:40]
-            out.append(DevAccount(name=f"dev{i}:{h}", balance=self.dev_balance,
-                                  personhood_tier=1 + i % 3))
+        out = list(self.accounts)
+        for i, addr in enumerate(self.dev_keys()):
+            out.append(DevAccount(name=addr, balance=self.dev_balance, personhood_tier=1 + i % 3))
         return out
 
     def validator_ids(self) -> list[str]:
-        return [f"val{i}:" + hashlib.sha256(f"{self.seed}/val/{i}".encode()).hexdigest()[:16]
+        """Validator Ed25519 pubkeys (hex), in index order."""
+        return [ed25519.public_key(self.validator_secret(i)).hex()
                 for i in range(self.validators)]
 
     def to_json(self) -> dict:
         d = asdict(self)
-        d["accounts"] = [asdict(a) for a in self.dev_account_list()]
+        d["accounts"] = [asdict(a) for a in self.accounts]
         d["notes"] = list(self.notes)
         return d
 

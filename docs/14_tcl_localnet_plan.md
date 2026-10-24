@@ -1,9 +1,24 @@
 # 14 — `tcl localnet`: offline, EVM-free local testnet (replaces anvil)
 
 Status: **MVP implemented** (`src/tcl/localnet/`, tests in `tests/test_localnet.py`).
-Consensus inside the localnet is a **PLACEHOLDER** (round-robin proposer + >2/3 equal-weight
-state-root quorum) until the sovereign-chain design (docs/13, docs/13a on `docs/sovereign-chain`)
-lands. RPC names, tx/block shape, and reject codes follow **doc 13a v0**.
+Default consensus is the **real `tcl.consensus.TendermintEngine`** (doc 13b): one engine per
+validator, Ed25519-signed proposals/prevotes/precommits, blocks finalized only by a >2/3 commit
+certificate that is stored with the block and re-verified on replay. The old round-robin
+**PLACEHOLDER** (>2/3 matching state roots, unsigned) remains available as `--consensus fast`.
+Dev txs are Ed25519-signed with dev keys derived from the public genesis seed (DEV ONLY).
+RPC names, tx/block shape and reject codes follow **doc 13a v0**.
+
+### BFT host loop (13b swap-in)
+`Localnet._produce_bft` builds a `_HostApp` (13b `Application`) per online validator:
+`build_block` dry-runs the mempool on that validator's ledger to get `state_root`;
+`validate_block` checks chain_id/height/prev_hash/time/validators_hash/tx_root/`last_commit`
+certificate and re-executes to compare `state_root`; `on_decide` applies for real. Engine actions
+are routed through a deterministic virtual-tick priority queue (messages +1 tick, timeouts after
+their delay; no sockets, no wall clock). All validators' block writes sit in one outer transaction
+per validator and roll back together if no one decides within `BFT_TICK_BUDGET`. A `byzantine`
+fault makes that validator equivocate (conflicting signed votes/proposals to half the peers, as in
+`tcl.consensus.sim`); honest nodes never fork (tested). `offline` validators skip rounds and replay
+committed blocks (certificate-checked) on return.
 
 ## 1. Goals
 1. One command starts N local validators with a deterministic genesis.
@@ -16,7 +31,7 @@ lands. RPC names, tx/block shape, and reject codes follow **doc 13a v0**.
 
 ## 2. CLI (implemented)
 ```
-tcl localnet start [-n 4] [--port 8645] [--seed tcl-dev] [--dev/--no-dev] [--foreground] [--data-dir .tcl/localnet]
+tcl localnet start [--consensus bft|fast] [-n 4] [--port 8645] [--seed tcl-dev] [--dev/--no-dev] [--foreground] [--data-dir .tcl/localnet]
 tcl localnet stop | status
 tcl localnet mine [COUNT]
 tcl localnet time advance SECONDS | time set UNIX_TS
@@ -24,6 +39,7 @@ tcl localnet snapshot            -> prints snapshot id
 tcl localnet revert SNAPSHOT_ID
 tcl localnet faucet ADDR AMOUNT
 tcl localnet fault VALIDATOR_IDX offline|online|byzantine|honest
+tcl localnet accounts | transfer FROM TO AMOUNT   # dev-key signed
 tcl localnet account ADDR | block HEIGHT
 ```
 `start` spawns `python -m tcl.localnet` in the background, writes `node.json` (pid, url, socket)
@@ -56,7 +72,8 @@ rolls back, the clock rewinds and the txs return to the mempool. Planned additio
 `delay`, `equivocate`, `crash-mid-commit`.
 
 **Known MVP gaps:**
-- No Ed25519 signatures, because Ed25519 isn't in the stdlib (see §6 D2). Dev txs are unsigned.
+- Ed25519 is the pure-Python, non-constant-time implementation from `tcl.consensus` (dev/test only).
+- Equivocation evidence is not yet turned into slashing in the localnet.
 - Personhood tiers and notes are genesis mocks.
 - No Groth16 verification in-node yet; the `zk` harness still shells out to snarkjs.
 - `aux_roots` are zero.
@@ -130,8 +147,8 @@ vendor/
   `pip install --no-index` from the bundle.
 
 ## 6. Open decisions (owner)
-- **D1 Consensus:** the placeholder stays until doc 13's engine lands. Should the localnet always run
-  the real engine with N in-process validators, or keep the fast placeholder mode as an option?
+- **D1 Consensus:** resolved: BFT engine is default, placeholder kept as `--consensus fast`. Open:
+  drop `fast` entirely once BFT speed is acceptable?
 - **D2 Signatures:** Ed25519 per 13a. Pure-Python R (RFC 8032 reference, about 150 LOC, slow but
   auditable) or vendor PyNaCl/libsodium (a compiled wheel)? Recommendation: R for the localnet, with an
   optional accelerated backend.

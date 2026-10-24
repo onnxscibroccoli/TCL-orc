@@ -19,7 +19,8 @@ from typing import Any, Callable, Optional
 from .node import Localnet, LocalnetError, Reject
 
 DEV_ONLY = {"tcl_mine", "tcl_warp", "tcl_setTime", "tcl_snapshot", "tcl_revert",
-            "tcl_faucet", "tcl_injectFault", "tcl_shutdown"}
+            "tcl_faucet", "tcl_injectFault", "tcl_shutdown", "tcl_devAccounts",
+            "tcl_devSend"}
 UNAUTHORIZED = -32001
 REJECTED = -32002
 LOCALNET_ERR = -32003
@@ -53,6 +54,8 @@ class Dispatcher:
             "tcl_faucet": n.faucet,
             "tcl_injectFault": n.inject_fault,
             "tcl_shutdown": self._shutdown,
+            "tcl_devAccounts": n.dev_accounts,
+            "tcl_devSend": n.dev_send,
         }
 
     def _shutdown(self) -> bool:

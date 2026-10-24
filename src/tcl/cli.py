@@ -493,13 +493,16 @@ def ln_start(data_dir: Path = LN_DIR, validators: int = typer.Option(4, "--valid
              port: int = typer.Option(8645, "--port"), seed: str = typer.Option("tcl-dev"),
              dev: bool = typer.Option(True, "--dev/--no-dev",
                                       help="enable dev-only RPC (mine/warp/snapshot/...)"),
+             consensus: str = typer.Option("bft", "--consensus",
+                                           help="bft (TendermintEngine, default) | fast "
+                                                "(PLACEHOLDER round-robin)"),
              foreground: bool = typer.Option(False, "--foreground")) -> None:
     """Start N in-process validators with deterministic genesis and a localhost JSON-RPC."""
     import subprocess
     import sys
     from .localnet.rpc import call
     argv = [sys.executable, "-m", "tcl.localnet", "--data-dir", str(data_dir), "--port",
-            str(port), "--validators", str(validators), "--seed", seed] + (["--dev"] if dev else [])
+            str(port), "--validators", str(validators), "--seed", seed, "--consensus", consensus] + (["--dev"] if dev else [])
     if foreground:
         from .localnet.__main__ import main
         main(argv[3:])
@@ -586,6 +589,18 @@ def ln_faucet(address: str, amount: int, data_dir: Path = LN_DIR) -> None:
 def ln_fault(validator: int, kind: str = typer.Argument(..., help="offline|online|byzantine|honest"),
              data_dir: Path = LN_DIR) -> None:
     _ln(data_dir, "tcl_injectFault", {"validator": validator, "kind": kind})
+
+
+@localnet_app.command("accounts")
+def ln_accounts(data_dir: Path = LN_DIR) -> None:
+    """List genesis dev accounts (Ed25519 pubkeys; dev only)."""
+    _ln(data_dir, "tcl_devAccounts")
+
+
+@localnet_app.command("transfer")
+def ln_transfer(sender: str, to: str, amount: int, data_dir: Path = LN_DIR) -> None:
+    """Sign (dev key) and submit a transfer from a genesis dev account (dev only)."""
+    _ln(data_dir, "tcl_devSend", sender, "transfer", {"to": to, "amount": amount})
 
 
 @localnet_app.command("account")
