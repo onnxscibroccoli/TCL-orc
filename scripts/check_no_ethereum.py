@@ -76,8 +76,11 @@ def check_py(path: Path) -> list[str]:
         if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs:
             if BAD_STRINGS.search(n.value.strip()) or KECCAK.search(n.value):
                 out.append(f"{rel}:{n.lineno}: Ethereum/EVM string literal {n.value[:40]!r}")
-        if isinstance(n, ast.Name) and KECCAK.search(n.id):
-            out.append(f"{rel}:{n.lineno}: keccak identifier {n.id}")
+        ident = (n.id if isinstance(n, ast.Name) else n.attr if isinstance(n, ast.Attribute)
+                 else n.name if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                               ast.ClassDef)) else None)
+        if ident and KECCAK.search(ident):
+            out.append(f"{rel}:{n.lineno}: keccak identifier {ident}")
     return out
 
 
