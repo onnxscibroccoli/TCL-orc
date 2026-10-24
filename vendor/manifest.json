@@ -1,0 +1,537 @@
+{
+ "schema": 1,
+ "target": {
+  "os": "linux",
+  "arch": "x86_64",
+  "python": [
+   "3.11",
+   "3.12",
+   "3.13"
+  ]
+ },
+ "requirements": "vendor/requirements-offline.txt",
+ "artifacts": [
+  {
+   "name": "annotated-doc",
+   "version": "0.0.5",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "annotated_doc-0.0.5-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101",
+   "size": 5302,
+   "license": "MIT",
+   "license_file": "vendor/licenses/annotated-doc-0.0.5.txt",
+   "source_url": "https://pypi.org/project/annotated-doc/0.0.5/"
+  },
+  {
+   "name": "annotated-types",
+   "version": "0.8.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "annotated_types-0.8.0-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0",
+   "size": 13427,
+   "license": "MIT",
+   "license_file": "vendor/licenses/annotated-types-0.8.0.txt",
+   "source_url": "https://pypi.org/project/annotated-types/0.8.0/"
+  },
+  {
+   "name": "attrs",
+   "version": "26.1.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "attrs-26.1.0-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309",
+   "size": 67548,
+   "license": "MIT",
+   "license_file": "vendor/licenses/attrs-26.1.0.txt",
+   "source_url": "https://pypi.org/project/attrs/26.1.0/"
+  },
+  {
+   "name": "hypothesis",
+   "version": "6.122.3",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "hypothesis-6.122.3-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "f0f57036d3b95b979491602b32c95b6725c3af678cccb6165d8de330857f3c83",
+   "size": 475651,
+   "license": "Mozilla Public License 2.0 (MPL 2.0)",
+   "license_file": "vendor/licenses/hypothesis-6.122.3.txt",
+   "source_url": "https://pypi.org/project/hypothesis/6.122.3/"
+  },
+  {
+   "name": "iniconfig",
+   "version": "2.3.1",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "iniconfig-2.3.1-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7",
+   "size": 7552,
+   "license": "MIT",
+   "license_file": "vendor/licenses/iniconfig-2.3.1.txt",
+   "source_url": "https://pypi.org/project/iniconfig/2.3.1/"
+  },
+  {
+   "name": "markdown-it-py",
+   "version": "4.2.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "markdown_it_py-4.2.0-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a",
+   "size": 91687,
+   "license": "MIT License",
+   "license_file": "vendor/licenses/markdown-it-py-4.2.0.txt",
+   "source_url": "https://pypi.org/project/markdown-it-py/4.2.0/"
+  },
+  {
+   "name": "mdurl",
+   "version": "0.1.2",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "mdurl-0.1.2-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8",
+   "size": 9979,
+   "license": "MIT License",
+   "license_file": "vendor/licenses/mdurl-0.1.2.txt",
+   "source_url": "https://pypi.org/project/mdurl/0.1.2/"
+  },
+  {
+   "name": "packaging",
+   "version": "26.3",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "packaging-26.3-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+   "size": 129956,
+   "license": "Apache-2.0 OR BSD-2-Clause",
+   "license_file": "vendor/licenses/packaging-26.3.txt",
+   "source_url": "https://pypi.org/project/packaging/26.3/"
+  },
+  {
+   "name": "pluggy",
+   "version": "1.7.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pluggy-1.7.0-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec",
+   "size": 27082,
+   "license": "MIT License",
+   "license_file": "vendor/licenses/pluggy-1.7.0.txt",
+   "source_url": "https://pypi.org/project/pluggy/1.7.0/"
+  },
+  {
+   "name": "pydantic",
+   "version": "2.14.1",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pydantic-2.14.1-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454",
+   "size": 488106,
+   "license": "MIT",
+   "license_file": "vendor/licenses/pydantic-2.14.1.txt",
+   "source_url": "https://pypi.org/project/pydantic/2.14.1/"
+  },
+  {
+   "name": "pydantic-core",
+   "version": "2.50.1",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pydantic_core-2.50.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+   "python": [
+    "cp311"
+   ],
+   "platform": "linux_x86_64",
+   "sha256": "8812592c85d0edf423f10eadcef42716d71e8219085ad9e85b775057b7306133",
+   "size": 2157623,
+   "license": "MIT",
+   "license_file": "vendor/licenses/pydantic-core-2.50.1.txt",
+   "source_url": "https://pypi.org/project/pydantic-core/2.50.1/"
+  },
+  {
+   "name": "pydantic-core",
+   "version": "2.50.1",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+   "python": [
+    "cp312"
+   ],
+   "platform": "linux_x86_64",
+   "sha256": "93ba4e9d8210d941c200431a56b2c0400b131865947903937ed3ec5404307d2e",
+   "size": 2160157,
+   "license": "MIT",
+   "license_file": "vendor/licenses/pydantic-core-2.50.1.txt",
+   "source_url": "https://pypi.org/project/pydantic-core/2.50.1/"
+  },
+  {
+   "name": "pydantic-core",
+   "version": "2.50.1",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pydantic_core-2.50.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+   "python": [
+    "cp313"
+   ],
+   "platform": "linux_x86_64",
+   "sha256": "17e722e156d0444ecaefbe640bdb60928752bf2013e2b7a11cdb099aaae19bec",
+   "size": 2158402,
+   "license": "MIT",
+   "license_file": "vendor/licenses/pydantic-core-2.50.1.txt",
+   "source_url": "https://pypi.org/project/pydantic-core/2.50.1/"
+  },
+  {
+   "name": "pydantic-settings",
+   "version": "2.16.1",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pydantic_settings-2.16.1-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "30f5313340da4e8f1b440d1910b92a5bc3ccbb6b4ba70ec2b8395bc921f418f5",
+   "size": 80771,
+   "license": "MIT",
+   "license_file": "vendor/licenses/pydantic-settings-2.16.1.txt",
+   "source_url": "https://pypi.org/project/pydantic-settings/2.16.1/"
+  },
+  {
+   "name": "pygments",
+   "version": "2.21.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pygments-2.21.0-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9",
+   "size": 1250147,
+   "license": "BSD-2-Clause",
+   "license_file": "vendor/licenses/pygments-2.21.0.txt",
+   "source_url": "https://pypi.org/project/pygments/2.21.0/"
+  },
+  {
+   "name": "pytest",
+   "version": "9.1.1",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pytest-9.1.1-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c",
+   "size": 386536,
+   "license": "MIT",
+   "license_file": "vendor/licenses/pytest-9.1.1.txt",
+   "source_url": "https://pypi.org/project/pytest/9.1.1/"
+  },
+  {
+   "name": "python-dotenv",
+   "version": "1.2.4",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "python_dotenv-1.2.4-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc",
+   "size": 23266,
+   "license": "BSD-3-Clause",
+   "license_file": "vendor/licenses/python-dotenv-1.2.4.txt",
+   "source_url": "https://pypi.org/project/python-dotenv/1.2.4/"
+  },
+  {
+   "name": "pyyaml",
+   "version": "6.0.3",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+   "python": [
+    "cp311"
+   ],
+   "platform": "linux_x86_64",
+   "sha256": "b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d",
+   "size": 806638,
+   "license": "MIT License",
+   "license_file": "vendor/licenses/pyyaml-6.0.3.txt",
+   "source_url": "https://pypi.org/project/pyyaml/6.0.3/"
+  },
+  {
+   "name": "pyyaml",
+   "version": "6.0.3",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+   "python": [
+    "cp312"
+   ],
+   "platform": "linux_x86_64",
+   "sha256": "ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc",
+   "size": 807870,
+   "license": "MIT License",
+   "license_file": "vendor/licenses/pyyaml-6.0.3.txt",
+   "source_url": "https://pypi.org/project/pyyaml/6.0.3/"
+  },
+  {
+   "name": "pyyaml",
+   "version": "6.0.3",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+   "python": [
+    "cp313"
+   ],
+   "platform": "linux_x86_64",
+   "sha256": "0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6",
+   "size": 801626,
+   "license": "MIT License",
+   "license_file": "vendor/licenses/pyyaml-6.0.3.txt",
+   "source_url": "https://pypi.org/project/pyyaml/6.0.3/"
+  },
+  {
+   "name": "rich",
+   "version": "15.0.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "rich-15.0.0-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb",
+   "size": 310654,
+   "license": "MIT License",
+   "license_file": "vendor/licenses/rich-15.0.0.txt",
+   "source_url": "https://pypi.org/project/rich/15.0.0/"
+  },
+  {
+   "name": "setuptools",
+   "version": "80.9.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "setuptools-80.9.0-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922",
+   "size": 1201486,
+   "license": "MIT",
+   "license_file": "vendor/licenses/setuptools-80.9.0.txt",
+   "source_url": "https://pypi.org/project/setuptools/80.9.0/"
+  },
+  {
+   "name": "shellingham",
+   "version": "1.5.4",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "shellingham-1.5.4-py2.py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686",
+   "size": 9755,
+   "license": "ISC License (ISCL)",
+   "license_file": "vendor/licenses/shellingham-1.5.4.txt",
+   "source_url": "https://pypi.org/project/shellingham/1.5.4/"
+  },
+  {
+   "name": "sortedcontainers",
+   "version": "2.4.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "sortedcontainers-2.4.0-py2.py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0",
+   "size": 29575,
+   "license": "Apache Software License",
+   "license_file": "vendor/licenses/sortedcontainers-2.4.0.txt",
+   "source_url": "https://pypi.org/project/sortedcontainers/2.4.0/"
+  },
+  {
+   "name": "typer",
+   "version": "0.27.3",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "typer-0.27.3-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "e50022f28b82a86313e54501317a1db64bf8f8d036ff8cfe5ca7e47675454aff",
+   "size": 123312,
+   "license": "MIT",
+   "license_file": "vendor/licenses/typer-0.27.3.txt",
+   "source_url": "https://pypi.org/project/typer/0.27.3/"
+  },
+  {
+   "name": "typing-extensions",
+   "version": "4.16.0",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+   "size": 45571,
+   "license": "PSF-2.0",
+   "license_file": "vendor/licenses/typing-extensions-4.16.0.txt",
+   "source_url": "https://pypi.org/project/typing-extensions/4.16.0/"
+  },
+  {
+   "name": "typing-inspection",
+   "version": "0.4.4",
+   "kind": "wheel",
+   "storage": "git",
+   "filename": "typing_inspection-0.4.4-py3-none-any.whl",
+   "python": [
+    "py3"
+   ],
+   "platform": "any",
+   "sha256": "65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147",
+   "size": 14750,
+   "license": "MIT",
+   "license_file": "vendor/licenses/typing-inspection-0.4.4.txt",
+   "source_url": "https://pypi.org/project/typing-inspection/0.4.4/"
+  },
+  {
+   "name": "circom",
+   "version": "2.1.9",
+   "kind": "binary",
+   "platform": "linux_x86_64",
+   "filename": "circom-linux-amd64",
+   "sha256": "e5575829252d763b7818049df9de2ef9304df834697de77fa63ce7babc23c967",
+   "size": 11172536,
+   "license": "GPL-3.0-only",
+   "license_file": "vendor/licenses/GPL-3.0.txt",
+   "purpose": "B: compile circuits (only when circuits change)",
+   "storage": "release",
+   "source_url": "https://github.com/iden3/circom/releases/download/v2.1.9/circom-linux-amd64",
+   "release_url": "https://github.com/onnxscibroccoli/TCL-orc/releases/download/offline-assets-v1/circom-linux-amd64"
+  },
+  {
+   "name": "circom-src",
+   "version": "2.1.9",
+   "kind": "source",
+   "platform": "any",
+   "filename": "circom-2.1.9.tar.gz",
+   "sha256": "ba2c82edabdca7190f4f152e3c4ebcdf3656805dc4c1c7e1d37a991d5a79e1cd",
+   "size": 523502,
+   "license": "GPL-3.0-only",
+   "license_file": "vendor/licenses/GPL-3.0.txt",
+   "purpose": "B: corresponding source for the GPL binary",
+   "storage": "release",
+   "source_url": "https://github.com/iden3/circom/archive/refs/tags/v2.1.9.tar.gz",
+   "release_url": "https://github.com/onnxscibroccoli/TCL-orc/releases/download/offline-assets-v1/circom-2.1.9.tar.gz"
+  },
+  {
+   "name": "circomspect-src",
+   "version": "0.9.0",
+   "kind": "source",
+   "platform": "any",
+   "filename": "circomspect-0.9.0.tar.gz",
+   "sha256": "4a9628c1af55dd43abfc4e6a9e2eb37b96abc2a289f28ea570c17ee72da29ae3",
+   "size": 3228217,
+   "license": "GPL-3.0-only",
+   "license_file": "vendor/licenses/GPL-3.0.txt",
+   "purpose": "B: circuit lint (cargo build --offline from vendored source)",
+   "storage": "release",
+   "source_url": "https://github.com/trailofbits/circomspect/archive/refs/tags/v0.9.0.tar.gz",
+   "release_url": "https://github.com/onnxscibroccoli/TCL-orc/releases/download/offline-assets-v1/circomspect-0.9.0.tar.gz"
+  },
+  {
+   "name": "node",
+   "version": "20.18.1",
+   "kind": "toolchain",
+   "platform": "linux_x86_64",
+   "filename": "node-v20.18.1-linux-x64.tar.xz",
+   "sha256": "c6fa75c841cbffac851678a472f2a5bd612fff8308ef39236190e1f8dbb0e567",
+   "size": 25792116,
+   "license": "MIT AND others (see file)",
+   "license_file": "vendor/licenses/node-20.18.1.txt",
+   "purpose": "B: runs the snarkjs prover until tcl.zk has an in-house prover",
+   "storage": "release",
+   "source_url": "https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz",
+   "release_url": "https://github.com/onnxscibroccoli/TCL-orc/releases/download/offline-assets-v1/node-v20.18.1-linux-x64.tar.xz"
+  },
+  {
+   "name": "snarkjs",
+   "version": "0.7.6",
+   "kind": "npm",
+   "platform": "any",
+   "filename": "snarkjs-0.7.6.tgz",
+   "sha256": "3a2b872e888e093ccee4a0636af4caf52a989c685926e663969a4ce8c2a8ead3",
+   "size": 1466834,
+   "license": "GPL-3.0-only",
+   "license_file": "vendor/licenses/GPL-3.0.txt",
+   "purpose": "B: Groth16 dev setup + prover",
+   "storage": "release",
+   "source_url": "https://registry.npmjs.org/snarkjs/-/snarkjs-0.7.6.tgz",
+   "release_url": "https://github.com/onnxscibroccoli/TCL-orc/releases/download/offline-assets-v1/snarkjs-0.7.6.tgz"
+  },
+  {
+   "name": "circomlib",
+   "version": "2.0.5",
+   "kind": "npm",
+   "platform": "any",
+   "filename": "circomlib-2.0.5.tgz",
+   "sha256": "9f80fa85d9c186589998d15e6dcb8ec59a6ed3fe1ec3cb2f753e493d94dd46b6",
+   "size": 1477989,
+   "license": "GPL-3.0-only",
+   "license_file": "vendor/licenses/GPL-3.0.txt",
+   "purpose": "B/test only: reference for tests/test_tcl_circuit_lib.py; production circuits use circuits/lib/tcl (Apache-2.0)",
+   "storage": "release",
+   "source_url": "https://registry.npmjs.org/circomlib/-/circomlib-2.0.5.tgz",
+   "release_url": "https://github.com/onnxscibroccoli/TCL-orc/releases/download/offline-assets-v1/circomlib-2.0.5.tgz"
+  }
+ ]
+}
