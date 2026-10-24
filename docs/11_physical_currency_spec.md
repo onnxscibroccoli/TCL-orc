@@ -1115,3 +1115,18 @@ This was not a real conflict. §9.2 gave only the allowed range (1%–25%). §9.
 **What we gave up:** some simplicity, since there are five settings instead of one. And the median rule stays off-chain until it can be built cheaply.
 
 **Superseded options, kept for the record.** The flat 5% cap, the flat 20% cap, and "the lower of 20% or 5 TCL" (the previous recommendation) are replaced by the rule above.
+
+#### Previous analysis (superseded 2026-10-23, kept for the record)
+
+
+| | Flat 5% (old spec, registry `COST_CAP` max) | Flat 20% (`NoteController` `MAX_COST_BPS`) | Recommended: the lower of 20% or 5 TCL |
+| --- | --- | --- | --- |
+| Small notes (5 TCL) | Credit at most 0.25. Too little to cover the chip, so nobody makes small notes | At most 1 | At most 1 |
+| Large notes (500 TCL) | At most 25 | At most 100, invites over-claiming | At most 5 |
+| Worst-case pool drain per mint | ≤ 25 | ≤ 100 | ≤ 5 |
+| Minting pays for honest makers | Not for small notes | Yes | Yes, wherever real cost ≤ cap |
+| Code change needed | Contract | Registry and spec | Registry max → 0.20; `NoteController` reads caps from governance |
+
+**Why.** The real cost of a note is about the same for every denomination (one chip and one plastic note; §7.6 estimates USD 1.6–2.3 each at 1 million notes). A percentage cap pays too little on small notes and too much on big ones. A fixed cap in TCL, with a percentage ceiling so tiny notes can't claim more than 20% of face value, fits a flat cost. The contract's 20% stays as the outer hard limit. The median rule (§7.2) and the per-epoch budget (§7.4) still limit cheating. Profit for an honest minter is $`R_d + (C_d - \text{real cost}) = R_d \ge 0`$ whenever real cost ≤ cap. If a small note really costs more than 1 TCL to make, new 5-notes won't pay. Re-arming existing notes (no new hardware) would then be the main source of small notes. **This is a recommendation pending Ian. The contract is unchanged.**
+
+*Exchange-rate caveat:* the hardware costs are in US dollars, and TCL has no fixed dollar price, so the 5 TCL figure needs checking once a market price exists.
