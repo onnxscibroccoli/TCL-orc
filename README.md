@@ -456,6 +456,8 @@ The two decay functions are **different functions**; the off-chain ledger and on
 
 ## Physical currency (MVP, testnet only)
 
+**Damaged or worn notes are handled off-chain only** (owner decision L13, 2026-10-23). They are retired directly into off-chain transactions, with no on-chain damaged-note retirement, replacement or refund path. The production-cost credit C and mint reward R in §7 are unchanged.
+
 > **Experimental.** A physical-notes MVP is on `main`; it is not audited and uses a dev-only trusted setup.
 
 What exists today:

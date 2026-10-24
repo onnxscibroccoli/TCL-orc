@@ -152,7 +152,7 @@ Two options were considered after re-entry:
 | Cost | Only the burn of $`V_d`$ (§7) | Full production cost again |
 | Linkability | Era counter links the eras of one note | No link between old and new note |
 
-**Recommendation: Option A.** A DORMANT note is re-armed to LIVE by a mint event (§7), which burns $`V_d`$ digital and sets $`\mathsf{leaf}_{\mathsf{id}} \leftarrow H(11, \mathsf{id}, k{+}1, \textsf{LIVE}, t_{\mathrm{now}}, 0)`$. The SE accepts the re-arm only with a ledger-signed (or proof-carrying) receipt for era $`k{+}1`$. Reasons: it reuses durable hardware, which is the point of reusable cash; the era counter makes stale-era replays impossible; and linkability is limited to the minter and depositor, never the intermediate holders. Option B remains for worn or damaged notes.
+**Recommendation: Option A.** A DORMANT note is re-armed to LIVE by a mint event (§7), which burns $`V_d`$ digital and sets $`\mathsf{leaf}_{\mathsf{id}} \leftarrow H(11, \mathsf{id}, k{+}1, \textsf{LIVE}, t_{\mathrm{now}}, 0)`$. The SE accepts the re-arm only with a ledger-signed (or proof-carrying) receipt for era $`k{+}1`$. Reasons: it reuses durable hardware, which is the point of reusable cash; the era counter makes stale-era replays impossible; and linkability is limited to the minter and depositor, never the intermediate holders. Option B is **not** implemented on-chain. Worn or damaged notes are retired purely off-chain (see §12, L13).
 
 ### 4.6 Research integration (Part A)
 
@@ -771,6 +771,8 @@ Source for every "Gemini rec" entry: Gemini deep research (user-supplied, 2026-1
 **Conviction check.** $`t_{1/2} = \ln 0.5 / \ln 0.9057 \approx 6.998`$ days, which is correct. With the normalized update, one day of support reaches $`1 - \alpha \approx 9.4\%`$ of steady state.
 
 **Sybil check.** Splitting $`V`$ credits across $`k`$ identities under quadratic voting gives $`k\sqrt{V/k} = \sqrt{kV}`$, which is correct and shows splitting pays. The report's "resistance $`\mathcal{O}(1/k)`$" is loose wording. The claim $`\mathrm{Cost}_{\mathrm{Sybil}}(k) = \gamma k^2 + \delta k`$ is still asserted without derivation.
+
+**L13 — Damaged notes: off-chain only.** **Damaged or worn notes are handled off-chain only** (owner decision L13, 2026-10-23). They are retired directly into off-chain transactions, with no on-chain damaged-note retirement, replacement or refund path. The production-cost credit C and mint reward R in §7 are unchanged.
 
 ## 13. Open questions (still unresolved)
 

@@ -25,6 +25,10 @@ Conservation (tested by fuzz + invariant): `token.balanceOf(controller) = P + po
 - **Dev trusted setup.** `contracts/verifiers/NoteDepositVerifier.sol` and fixtures come from a single-party dev zkey (`scripts/gen_note_fixtures.py`). Production needs a ceremony.
 - Admin roles (PARAMS/PAUSER/UPGRADER) are held by the deployer; handover to governance/timelock is out of scope here.
 
+## Damaged notes: off-chain only
+
+**Damaged or worn notes are handled off-chain only** (owner decision L13, 2026-10-23). They are retired directly into off-chain transactions, with no on-chain damaged-note retirement, replacement or refund path. The production-cost credit C and mint reward R in §7 are unchanged. `NoteController` has no retirement or replacement function, by design.
+
 ## Fail-closed behaviour
 
 Verifier revert/false ⇒ `InvalidProof`; zero addresses rejected at init; implementation initializers disabled; bounds enforced on every parameter; Python helpers raise on out-of-range inputs and `prove_deposit` self-verifies.
