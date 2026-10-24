@@ -19,7 +19,7 @@ version = { attr = "tcl.__version__" }  # single source: src/tcl/__init__.py
 where = ["src"]
 
 [tool.setuptools.package-data]
-tcl = ["py.typed", "crypto/*.json"]  # + _data/** staged by setup.py build_py
+tcl = ["py.typed", "crypto/*.json", "node/vk/*.json"]  # + _data/** staged by setup.py build_py
 
 [tool.pytest.ini_options]
 testpaths = ["ledger", "tests", "test"]

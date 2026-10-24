@@ -110,7 +110,12 @@ class Ledger:
         log.info("rollback", extra={"root": str(root), "undone": undone})
         return undone
 
+    # Optional governed rule (native node): callable(balance, dt) -> (new, fee). None = default.
+    decay_override = None
+
     def _decay(self, balance: int, dt_seconds: int) -> tuple[int, int]:
+        if self.decay_override is not None:
+            return self.decay_override(balance, dt_seconds)
         if self.mode == "fixed":
             return apply_demurrage_fixed(balance, dt_seconds)
         return apply_demurrage(balance, dt_seconds // 86_400)

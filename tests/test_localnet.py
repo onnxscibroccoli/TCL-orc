@@ -74,9 +74,10 @@ def test_reject_codes(net):
     net.send_tx(tx(net, None, "spend_nullifier", {"nullifier": 42}))
     net.send_tx(tx(net, a0, "transfer", {"to": a1, "amount": 10**15}, nonce=0))  # tier 1
     net.mine()
-    codes = [r.get("code") for r in net.get_block(1)["receipts"]]
-    assert codes == ["BAD_NONCE", "UNKNOWN_MODULE", "UNKNOWN_METHOD", None, "NULLIFIER_SPENT",
-                     "TIER_LIMIT"]
+    codes = [r.get("code") for r in net.get_block(1)["receipts"]][:6]  # + beacon reveal
+    # fail-closed: {"dev": true} is not a proof unless genesis sets dev_proofs
+    assert codes == ["BAD_NONCE", "UNKNOWN_MODULE", "UNKNOWN_METHOD", "BAD_PROOF",
+                     "BAD_PROOF", "TIER_LIMIT"]
     assert net.verify()
 
 
