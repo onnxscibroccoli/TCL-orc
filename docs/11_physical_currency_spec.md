@@ -221,7 +221,7 @@ Why Option A:
 - The era counter makes it impossible to replay an old era.
 - Only the person who re-armed it and the person who deposited it could be linked to it. The people who held it in between never can.
 
-Option B is still used for worn or damaged notes.
+Option B is **not** implemented on-chain. Worn or damaged notes are retired purely off-chain, with no on-chain retirement, replacement or refund (see §12, L13).
 
 ### 4.6 Research integration (Part A)
 
@@ -1028,6 +1028,8 @@ See §10.9. **Not built yet; personhood is a mock today.**
 **Checking the conviction math.** $`t_{1/2} = \ln 0.5 / \ln 0.9057 \approx 6.998`$ days. That is correct. With the normalized formula, after one day your support reaches $`1 - \alpha \approx 9.4\%`$ of its full level.
 
 **Checking the fake-identity math (why quadratic voting was dropped, A.1).** Under quadratic voting, splitting $`V`$ credits across $`k`$ fake identities gives $`k\sqrt{V/k} = \sqrt{kV}`$ votes. That is correct, and it shows splitting pays. For example, 100 credits in one identity buy 10 votes, but split over 4 identities they buy 4 × 5 = 20 votes. That is why personhood must be strong. The report's phrase "resistance $`\mathcal{O}(1/k)`$" is loose wording. Its claim $`\mathrm{Cost}_{\mathrm{Sybil}}(k) = \gamma k^2 + \delta k`$ is still stated without proof.
+
+**L13 — Damaged notes: off-chain only.** **Damaged or worn notes are handled off-chain only** (owner decision L13, 2026-10-23). They are retired directly into off-chain transactions, with no on-chain damaged-note retirement, replacement or refund path. The production-cost credit C and mint reward R in §7 are unchanged.
 
 ## 13. Open questions (still unresolved)
 

@@ -552,6 +552,8 @@ The two decay functions are **different functions**; the off-chain ledger and on
 >
 > **Example.** You mint a 100 TCL note. Your account pays 100 TCL. If you report a production cost of 3 TCL and the reward rate is 1%, you get back 3 + 1 = 4 TCL from the shared incentive pool, so your net cost is 96 TCL. The cost refund is capped at 20 TCL (20%) and the reward at 1 TCL (1%). If the pool is empty you get nothing back and simply swap 100 for 100.
 
+**Damaged or worn notes are handled off-chain only** (owner decision L13, 2026-10-23). They are retired directly into off-chain transactions, with no on-chain damaged-note retirement, replacement or refund path. The production-cost credit C and mint reward R in §7 are unchanged.
+
 > **Experimental.** A physical-notes MVP is on `main`; it is not audited and uses a dev-only trusted setup.
 
 What exists today:
