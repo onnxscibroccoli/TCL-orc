@@ -162,3 +162,7 @@ out/
 cache/
 broadcast/
 .tcl/
+
+# offline bundle: fetched release assets (never committed)
+vendor/assets/
+*.part

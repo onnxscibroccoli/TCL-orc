@@ -22,9 +22,9 @@ pragma circom 2.1.6;
 // Public signals (in order): newRoot, fee, oldRoot, newTime.
 // (circom lists outputs first, then public inputs.)
 
-include "circomlib/circuits/poseidon.circom";
-include "circomlib/circuits/bitify.circom";
-include "circomlib/circuits/comparators.circom";
+include "lib/tcl/poseidon.circom";
+include "lib/tcl/bitify.circom";
+include "lib/tcl/comparators.circom";
 include "lib/merkle.circom";
 include "lib/fixedpoint.circom";
 

@@ -17,8 +17,8 @@ pragma circom 2.1.6;
 //
 // Public inputs (snarkjs order): id, denom, era, ctx, recipient, nf.
 
-include "circomlib/circuits/poseidon.circom";
-include "circomlib/circuits/bitify.circom";
+include "../lib/tcl/poseidon.circom";
+include "../lib/tcl/bitify.circom";
 
 template NoteDeposit() {
     signal input id;

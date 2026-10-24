@@ -1,0 +1,26 @@
+# Pinned inputs for the offline wheelhouse (runtime + test). Versions = requirements-test.lock.
+# Regenerate the bundle with: python scripts/bundle.py build   (online, maintainer only)
+annotated-doc==0.0.5
+annotated-types==0.8.0
+attrs==26.1.0
+hypothesis==6.122.3
+iniconfig==2.3.1
+markdown-it-py==4.2.0
+mdurl==0.1.2
+packaging==26.3
+pluggy==1.7.0
+pydantic==2.14.1
+pydantic-core==2.50.1
+pydantic-settings==2.16.1
+pygments==2.21.0
+pytest==9.1.1
+python-dotenv==1.2.4
+pyyaml==6.0.3
+rich==15.0.0
+shellingham==1.5.4
+sortedcontainers==2.4.0
+typer==0.27.3
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+# build backend for `pip install --no-build-isolation -e .`
+setuptools==80.9.0
