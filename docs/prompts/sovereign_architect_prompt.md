@@ -43,12 +43,13 @@ If these docs conflict with each other, stop and report the conflict. Never sile
 | L3 | **No protocol transaction fees.** Spam is controlled by tiered per-person rate limits and an optional anti-spam PoW stamp, never by fee bidding. |
 | L4 | **Genesis split: 70% / 30%.** 70% is airdropped to verified persons. 30% is auctioned to fund note manufacturers and bootstrapping. |
 | L5 | **Physical notes:** fixed denominations of **5–500**, with a **maximum of 500**. Notes pass offline, hand to hand, like cash, and **don't decay while physical**. Notes are **reusable with re-arm**: each note has a permanent id and gets a new one-time spend nullifier/era on every on-chain re-entry, and old-era proofs are rejected. A lost note is lost. Holders are anonymous. |
-| L6 | **Burn-to-mint is profitable.** Minting burns face value from a digital balance, refunds production cost (capped at 20%), and pays a reward of up to 1% from the incentive pool. If the pool is empty, it falls back to a 1:1 swap. Supply is conserved. Anyone can mint. |
+| L6 | **Burn-to-mint:** minting burns face value V from a digital balance and creates a note of face value V, plus at most a bounded reward R (≤ 1%) from the incentive pool. If the pool is empty, it falls back to a 1:1 swap. Supply is conserved. Anyone can mint. **There is no production-cost refund (see L13).** |
 | L7 | **Re-entry anti-hoarding:** large re-entering holders must redistribute promptly or pay a velocity penalty. The penalty applies per *person*, not per address. |
 | L8 | **Governance is one person, one vote**, via **ZK personhood** with **MACI** (encrypted, anti-collusion ballots) and **conviction voting** with a **7-day half-life**. The half-life is governance-tunable within [3, 30] days. A normal proposal passes with more than 50%. A constitutional proposal (upgrades, guardian, UBI, VKs, consensus params) needs more than 66%. Biometrics are optional. |
 | L9 | **Tiered vouching:** the base tier needs **3 vouches**, and higher transaction limits need more attestations. Vouchers are **bonded** and slashed for fake vouches. Funneling through many small accounts is detected and penalized, so creating fake identities never pays. Kiosks only relay. |
 | L10 | **Incentivized reporting:** the bounty for proving fraud or bribery is greater than the bribe, and **capped at the slashed bond** plus a bounded pool top-up. A challenge window applies, and bonds can be withdrawn after it closes. |
 | L11 | **UBI is optional:** paid per person, and switched on only by a constitutional vote once personhood proofs are judged secure. It ships **disabled**. |
+| L13 | **No production-cost refund and no damaged-note handling, on-chain or in native modules (owner decision, 2026-10-23).** The native `notes` module has **no cost-refund (C) path**: no cost attestation, no cost cap, and no budget spent on C. Physically damaged notes are handled **purely off-chain** and retired directly into off-chain transactions, with no on-chain refund or replacement. The goal is a simpler ledger and full autonomy. *Consequence (not a new decision):* removing C lowers minting profitability, so the reward R and/or off-chain economics must cover production cost. Report this as a modeled consequence, and don't add C back. |
 | L12 | **Emergency guardian:** it can only pause. It can't unpause, upgrade or move funds, it expires after at most 180 days, and governance can revoke it. |
 
 ### Open owner decisions (from doc 13; do NOT assume)
@@ -110,7 +111,7 @@ Any further decision you discover becomes `D6+`. Add it to `docs/DECISIONS.md` a
 |---|---|---|
 | `contracts/CirculatoryEngine.sol` | `bank` + `demurrage` + `settlement` | Balances and the vault at leaf 0. Settlement uses `StateVerifier`. Lazy linear demurrage above the 5M threshold. Pausable. Root history and rollback. Replicate every behavior covered in `test/contracts/CirculatoryEngine.t.sol` and `Security.t.sol` as Python tests with the same IDs. |
 | `contracts/verifiers/StateVerifier.sol`, `NoteDepositVerifier.sol` | `zk.verifier` (native Groth16) | Pairing check in-node. VKs live in state under `vk_id` and change only via constitutional governance. Batch multi-pairing is allowed. Cross-check against snarkjs-generated proofs and the existing fixtures. |
-| `contracts/physical/NoteController.sol` | `notes` | Mint (burn + cost refund ≤ 20% + reward ≤ 1%, 1:1 fallback), deposit with nullifier/era, **re-arm**, and denominations 5–500. Supply-conservation invariant. Per-person (not per-address) hoarding threshold, via personhood id. |
+| `contracts/physical/NoteController.sol` | `notes` | Mint = burn V → note V + reward R ≤ 1% (1:1 fallback); **no cost-refund path and no damaged-note logic (L13)**, deposit with nullifier/era, **re-arm**, and denominations 5–500. Supply-conservation invariant. Per-person (not per-address) hoarding threshold, via personhood id. |
 | `circuits/puf_verify.circom` (plus the deleted mint stub) | `notes.attestation` (interface only) | Real chip/PUF verification is out of scope. Keep it as a pluggable verifier, `MOCK` in localnet. |
 | `governance/ConvictionVoting.sol` | `gov.conviction` | Half-life parameter in [3, 30] days (default 7). Votes for and against. Thresholds of >50% and >66% (constitutional). Add MACI (`gov.maci`): coordinator key, encrypted messages, key-change anti-collusion and a tally proof. |
 | `governance/GovernanceTimelock.sol` | `gov.timelock` | Delayed execution of passed proposals. Native "upgrade" means a governed module-version switch at a set height. |
@@ -168,7 +169,7 @@ Build:
 - `vendor/MANIFEST.lock` and `tcl doctor --offline` (hash-verify everything)
 - a network-disabled CI job
 - canonical encoding behind an interface (D5; dev default per doc 13)
-- `docs/DECISIONS.md`
+- `docs/DECISIONS.md`, which must keep the existing DECIDED entry for L13
 
 Acceptance tests:
 - **P0-A1:** `unshare -n pytest -q` passes.
@@ -249,7 +250,7 @@ Acceptance tests:
 - **P6-A1:** a cold start offline in under 60 s.
 - **P6-A2:** time advance triggers the correct demurrage accrual.
 - **P6-A3:** a snapshot restores a byte-identical state root.
-- **P6-A4:** end to end: airdrop → transfer → mint note → offline handoff → deposit → re-arm → governance proposal via MACI → tally → param change applied.
+- **P6-A4:** end to end: airdrop → transfer → mint note (no refund path; assert that no C transfer happens) → offline handoff → deposit → re-arm → governance proposal via MACI → tally → param change applied.
 - **P6-A5:** the ceremony transcript verifies, and a contribution from a single honest party is detected in the transcript.
 
 ### P7: Release hardening
@@ -299,4 +300,4 @@ NEXT: one line
 6. **When uncertain, stop and ask.** Record a `D#` entry rather than guessing. Never guess on consensus, crypto or monetary parameters.
 7. **No security claims.** Don't say "secure", "audited" or "production-ready" unless an external audit and a public ceremony exist. Say "dev/insecure" instead.
 8. **Keep design and implementation separate.** Label every section of your output `IMPLEMENTED + TESTED`, `IMPLEMENTED, UNTESTED` or `DESIGN ONLY`.
-9. **Don't modify locked decisions L1–L12.** If one looks wrong, report it with a rationale and keep implementing as specified.
+9. **Don't modify locked decisions L1–L13.** If one looks wrong, report it with a rationale and keep implementing as specified.
