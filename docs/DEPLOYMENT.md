@@ -1,5 +1,9 @@
 # TCL deployment runbook (v0.1.0rc1)
 
+> **In plain words.** *Deploying* means installing TCL's programs on a blockchain. This page is the step-by-step checklist. Today it may only be done on a *testnet*, a practice blockchain where coins are worth nothing. Real use (*mainnet*) needs three things first: a public setup ceremony for the proofs, an outside audit, and control held by a *timelock* (a contract that forces a waiting period before changes). The deploy script refuses to run on a real chain without the first and third. Never paste secret keys into files or chat. Terms are in the [Glossary](GLOSSARY.md).
+>
+> **What this means for you:** you need an RPC URL (the web address of a blockchain node), a deployer key with test coins, and an explorer API key. Follow the sections in order.
+
 > **Status: release candidate, unaudited. Deploy to testnets only.** Mainnet requires
 > (1) a public multi-party trusted setup, (2) an external audit, and (3) ownership held by
 > a timelock — the deploy script enforces (1) and (3) by refusing to run otherwise.

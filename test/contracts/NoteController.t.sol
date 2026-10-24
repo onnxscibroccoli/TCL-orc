@@ -6,7 +6,8 @@ import {stdJson} from "forge-std/StdJson.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {NoteController, INoteDepositVerifier} from "../../contracts/physical/NoteController.sol";
+import {ParameterRegistry} from "../../contracts/governance/ParameterRegistry.sol";
+import {NoteController, INoteDepositVerifier, IParamRegistry} from "../../contracts/physical/NoteController.sol";
 import {NoteDepositVerifier} from "../../contracts/verifiers/NoteDepositVerifier.sol";
 
 contract MockTCL is ERC20 {
@@ -219,16 +220,17 @@ contract NoteControllerUnitTest is Base {
     function test_RewardAndCostBounds() public {
         (uint256 cost, uint256 reward) = _mint(1, 500);
         assertEq(reward, (500 * UNIT * 100) / 10_000); // 1%
-        assertEq(cost, nc.costCap(500));
+        assertEq(cost, 3 * UNIT); // c_abs binds for large notes
         vm.expectRevert(NoteController.OutOfBounds.selector);
         nc.setParams(101, 1 days, 1, 1, 1 days, 1 days);
         vm.expectRevert(NoteController.OutOfBounds.selector);
-        nc.setDenomination(100, true, 20 * UNIT + 1); // > 20% of V
+        nc.setDenomination(100, true, 50 * UNIT + 1); // > 50% of V
     }
 
     function test_EpochBudgetFallsBackToOneToOne() public {
-        nc.setParams(100, 1 days, 5 * UNIT + 25 * UNIT / 10, 5_000_000 * UNIT, 30 days, 30 days);
-        (uint256 c1, uint256 r1) = _mint(1, 500); // 2.5 + 5 = 7.5 fits
+        nc.setCostPolicy(4000, 3 * UNIT, UNIT / 4, 0, 7 days); // no small-note reserve here
+        nc.setParams(100, 1 days, 8 * UNIT, 5_000_000 * UNIT, 30 days, 30 days);
+        (uint256 c1, uint256 r1) = _mint(1, 500); // 3 + 5 = 8 fits
         assertGt(c1 + r1, 0);
         (uint256 c2, uint256 r2) = _mint(2, 500);
         assertEq(c2 + r2, 0);
@@ -317,6 +319,132 @@ contract NoteControllerUnitTest is Base {
             _conserved();
         }
         assertEq(tcl.totalSupply(), supply); // no issuance
+    }
+}
+
+/// docs/11 §7.2 cost-credit policy, read from the real ParameterRegistry defaults.
+contract NoteControllerCostPolicyTest is Base {
+    MockVerifier mv;
+    ParameterRegistry reg;
+    uint256[2] a;
+    uint256[2][2] b;
+    uint256[2] c;
+
+    function setUp() public {
+        mv = new MockVerifier();
+        _deploy(address(mv), address(0));
+        reg = new ParameterRegistry(address(this), 7 days);
+        nc.setRegistry(IParamRegistry(address(reg)));
+        nc.setParams(100, 1 days, 1e30, 5_000_000 * UNIT, 30 days, 30 days);
+    }
+
+    function _mint(uint256 id, uint32 d, uint256 attested) internal returns (uint256 cost, uint256 reward) {
+        vm.prank(minter);
+        return nc.mint(id, d, attested);
+    }
+
+    /// Spec table (docs/11 §7.2): gamma 40%, c_abs 3, rho 0.2%, b_small 0.25 on 5/10/20.
+    function test_DefaultScheduleAllDenominations() public {
+        uint32[7] memory ds = [uint32(5), 10, 20, 50, 100, 200, 500];
+        uint256[7] memory wantC = [uint256(2e18), 3e18, 3e18, 3e18, 3e18, 3e18, 3e18];
+        uint256[7] memory wantR = [uint256(0.26e18), 0.27e18, 0.29e18, 0.1e18, 0.2e18, 0.4e18, 1e18];
+        for (uint256 i; i < 7; i++) {
+            (uint256 cc, uint256 rr) = _mint(i + 1, ds[i], type(uint256).max);
+            assertEq(cc, wantC[i], "cost");
+            assertEq(rr, wantR[i], "reward");
+            assertLe(cc + rr, (uint256(ds[i]) * UNIT * 6000) / 10_000);
+        }
+        _conserved();
+    }
+
+    function test_HonestCostIsPaidNotCap() public {
+        (uint256 cc, uint256 rr) = _mint(1, 5, 1.5e18);
+        assertEq(cc, 1.5e18);
+        assertEq(rr, 0.26e18); // minter profit = reward when real cost <= cap
+    }
+
+    function test_RearmNoCostRewardAfterCirculation() public {
+        _mint(1, 100, type(uint256).max);
+        nc.deposit(1, 11, address(0xB0B), a, b, c);
+        vm.prank(minter);
+        (uint256 c1, uint256 r1) = nc.rearm(1, type(uint256).max);
+        assertEq(c1, 0);
+        assertEq(r1, 0); // too soon: < 7 days since era start
+        nc.deposit(1, 12, address(0xB0B), a, b, c);
+        vm.warp(block.timestamp + 7 days);
+        vm.prank(minter);
+        (uint256 c2, uint256 r2) = nc.rearm(1, type(uint256).max);
+        assertEq(c2, 0);
+        assertEq(r2, 0.2e18); // rho * V, no small bonus on re-arm
+        _conserved();
+    }
+
+    function test_SmallNoteReserveSurvivesLargeMints() public {
+        nc.setParams(100, 1 days, 10 * UNIT, 5_000_000 * UNIT, 30 days, 30 days); // budget 10, 50% reserved
+        (uint256 c1, uint256 r1) = _mint(1, 500, type(uint256).max); // 4 <= 5 large budget
+        assertEq(c1 + r1, 4e18);
+        (uint256 c2, uint256 r2) = _mint(2, 500, type(uint256).max); // 8 > 5: 1:1
+        assertEq(c2 + r2, 0);
+        (uint256 c3, uint256 r3) = _mint(3, 5, type(uint256).max); // small notes still credited
+        assertEq(c3 + r3, 2.26e18);
+        _conserved();
+    }
+
+    function test_RegistryFailureFailsClosedToOneToOne() public {
+        nc.setRegistry(IParamRegistry(address(0xdead))); // no code: every read reverts
+        (uint256 cc, uint256 rr) = _mint(1, 5, type(uint256).max);
+        assertEq(cc + rr, 0);
+        _conserved();
+    }
+
+    function test_GovernanceMovesPolicyWithinBounds() public {
+        vm.warp(block.timestamp + 7 days);
+        reg.setParameter(reg.SMALL_BONUS(), 0.5e18);
+        (, uint256 rr) = _mint(1, 5, type(uint256).max);
+        assertEq(rr, 0.51e18);
+        bytes32 k = reg.COST_CAP();
+        vm.warp(block.timestamp + 7 days);
+        vm.expectRevert();
+        reg.setParameter(k, 0.55e18); // above hard 50%
+    }
+
+    function test_LocalPolicyBounds() public {
+        vm.expectRevert(NoteController.OutOfBounds.selector);
+        nc.setCostPolicy(5001, 0, 0, 0, 7 days);
+        vm.expectRevert(NoteController.OutOfBounds.selector);
+        nc.setCostPolicy(0, 10 * UNIT + 1, 0, 0, 7 days);
+        vm.expectRevert(NoteController.OutOfBounds.selector);
+        nc.setCostPolicy(0, 0, UNIT + 1, 0, 7 days);
+        vm.expectRevert(NoteController.OutOfBounds.selector);
+        nc.setCostPolicy(0, 0, 0, 8001, 7 days);
+        vm.expectRevert(NoteController.OutOfBounds.selector);
+        nc.setCostPolicy(0, 0, 0, 0, 91 days);
+        vm.prank(minter);
+        vm.expectRevert();
+        nc.setRegistry(IParamRegistry(address(0)));
+    }
+
+    /// Any policy inside the hard bounds: credit <= 60% of V, cost <= attested, supply unchanged.
+    function testFuzz_CreditBoundedAndConserved(
+        uint16 cb,
+        uint256 ca,
+        uint256 bo,
+        uint16 rb,
+        uint8 di,
+        uint256 attested
+    ) public {
+        nc.setRegistry(IParamRegistry(address(0)));
+        nc.setCostPolicy(
+            uint16(bound(cb, 0, 5000)), bound(ca, 0, 10 * UNIT), bound(bo, 0, UNIT), uint16(bound(rb, 0, 8000)), 7 days
+        );
+        uint32[7] memory ds = [uint32(5), 10, 20, 50, 100, 200, 500];
+        uint32 d = ds[di % 7];
+        uint256 supply = tcl.totalSupply();
+        (uint256 cc, uint256 rr) = _mint(1, d, attested);
+        assertLe(cc, attested);
+        assertLe(cc + rr, (uint256(d) * UNIT * 6000) / 10_000);
+        _conserved();
+        assertEq(tcl.totalSupply(), supply);
     }
 }
 

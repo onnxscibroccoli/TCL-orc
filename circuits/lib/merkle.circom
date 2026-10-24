@@ -1,6 +1,6 @@
 pragma circom 2.1.6;
 
-include "circomlib/circuits/poseidon.circom";
+include "tcl/poseidon.circom";
 
 // Boolean-constrained 2-way swap: bit=0 -> (cur, sib), bit=1 -> (sib, cur).
 template OrderedPair() {

@@ -22,15 +22,17 @@ def test_circuits_present_and_versioned():
 
 
 def test_every_hint_is_bound_by_a_constraint():
-    """Each `x <-- ...` must have x appear in an `===` in the same template."""
+    """Each `x <-- ...` must have x appear in an `===` / `<==` constraint in the same template."""
     hints = 0
     for p in CIRCUITS:
         for name, body in _templates(p.read_text()):
-            constraints = " ".join(l for l in body.splitlines() if "===" in l)
+            constraints = " ".join(l for l in body.splitlines() if "===" in l or "<==" in l)
             for target in re.findall(r"(\w+)\s*<--", body):
                 hints += 1
                 assert re.search(rf"\b{target}\b", constraints), f"{p.name}:{name}:{target}"
-    assert hints == 2  # only DivConst's quotient/remainder hints
+    # DivConst's quotient/remainder + the in-house gadgets in circuits/lib/tcl
+    # (IsZero inverse; indexed hints like Num2Bits out[i] are not counted).
+    assert hints == 3
 
 
 def test_depth_is_parameterized():

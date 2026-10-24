@@ -1,7 +1,7 @@
 pragma circom 2.1.6;
 
-include "circomlib/circuits/bitify.circom";
-include "circomlib/circuits/comparators.circom";
+include "tcl/bitify.circom";
+include "tcl/comparators.circom";
 
 // q = floor(num / den) for a compile-time constant 0 < den < 2^64.
 // Constrained: num === q*den + r, 0 <= r <= den-1 (two 64-bit range checks),

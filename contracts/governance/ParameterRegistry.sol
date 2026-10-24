@@ -24,6 +24,11 @@ contract ParameterRegistry {
     bytes32 public constant POOL_SHARE = keccak256("phi");
     bytes32 public constant EMISSION_RATE = keccak256("eta");
     bytes32 public constant VOTE_HALF_LIFE = keccak256("t_half"); // conviction half-life (seconds)
+    // Cost-credit policy for NoteController (docs/11 §7.2)
+    bytes32 public constant COST_CAP_ABS = keccak256("c_abs"); // absolute cost-credit cap, base units
+    bytes32 public constant SMALL_BONUS = keccak256("b_small"); // flat first-mint bonus for notes <= 20
+    bytes32 public constant SMALL_RESERVE = keccak256("small_reserve"); // epoch-budget share reserved for small notes
+    bytes32 public constant MIN_CIRCULATION = keccak256("min_circ"); // min era age before a re-arm earns a reward
 
     struct Param {
         uint256 value;
@@ -68,10 +73,14 @@ contract ParameterRegistry {
         _add(HOARD_HORIZON, 90 days, 1 days, 365 days, 0, 5_000);
         _add(RELEASE_WINDOW, 30 days, 1 days, 365 days, 0, 5_000);
         _add(MINT_REWARD, 0.002e18, 0, 0.01e18, 0.001e18, 0);
-        _add(COST_CAP, 0.02e18, 0, 0.05e18, 0.005e18, 0);
+        _add(COST_CAP, 0.4e18, 0, 0.5e18, 0.05e18, 0);
         _add(POOL_SHARE, 0.2e18, 0, 0.5e18, 0.05e18, 0);
         _add(EMISSION_RATE, 0.05e18, 0.01e18, 0.25e18, 0.02e18, 0);
         _add(VOTE_HALF_LIFE, 7 days, 3 days, 30 days, 0, 5_000);
+        _add(COST_CAP_ABS, 3 * s, 0, 10 * s, 1 * s, 0);
+        _add(SMALL_BONUS, 0.25e18, 0, 1 * s, 0.25e18, 0);
+        _add(SMALL_RESERVE, 0.5e18, 0, 0.8e18, 0.1e18, 0);
+        _add(MIN_CIRCULATION, 7 days, 1 days, 90 days, 0, 5_000);
     }
 
     function _add(bytes32 key, uint256 value, uint256 min, uint256 max, uint256 stepAbs, uint256 stepBps) private {

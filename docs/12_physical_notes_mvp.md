@@ -1,5 +1,9 @@
 # 12 — Physical notes MVP (implementation of docs/11 §4, §6, §7)
 
+> **In plain words.** This page says which parts of the physical-cash design (doc 11) are actually built. An *MVP* (minimum viable product) is a first, bare-bones version. You can mint notes worth 5, 10, 20, 50, 100, 200 or 500 TCL by paying digital TCL. Each note can be deposited back, then *re-armed* with a fresh one-time code and used again. Big deposits are unlocked gradually. **Important limits:** there is no real chip (it is simulated), nothing checks that a physical note really exists, limits are per address rather than per person, and the proof setup is development-only. Terms are in the [Glossary](GLOSSARY.md).
+>
+> **Example (real limits from the code).** Minting a 500 TCL note: you pay 500 TCL. The cost refund can be at most 20% (100 TCL) and the reward at most 1% (5 TCL), so the most you can get back is 105 TCL. If this epoch's budget or the pool is used up, you get 0 back: a straight 500-for-500 swap. The total amount of TCL never changes.
+
 Status: **MVP, dev-only trusted setup, not audited, not production.**
 
 ## What is implemented
@@ -24,6 +28,10 @@ Conservation (tested by fuzz + invariant): $`\mathrm{balance}(\mathrm{controller
 - **Per-address aggregation** stands in for per-person pseudonyms $`\nu`$ (§6.5); Sybil splitting across addresses is NOT prevented until the personhood layer exists. No personhood floor $`\theta_{\min}`$.
 - **Dev trusted setup.** `contracts/verifiers/NoteDepositVerifier.sol` and fixtures come from a single-party dev zkey (`scripts/gen_note_fixtures.py`). Production needs a ceremony.
 - Admin roles (PARAMS/PAUSER/UPGRADER) are held by the deployer; handover to governance/timelock is out of scope here.
+
+## Damaged notes: off-chain only
+
+**Damaged or worn notes are handled off-chain only** (owner decision L13, 2026-10-23). They are retired directly into off-chain transactions, with no on-chain damaged-note retirement, replacement or refund path. The production-cost credit C and mint reward R in §7 are unchanged. `NoteController` has no retirement or replacement function, by design.
 
 ## Fail-closed behaviour
 

@@ -12,4 +12,6 @@ authors:
 
 # Abstract
 
+> **In plain words.** This is an early research note, kept for history. Where it disagrees with the code or with the [README white paper](../README.md#white-paper-the-mathematics-of-tcl), the code wins. Terms are in the [Glossary](GLOSSARY.md).
+
 The Thresholded Circulatory Ledger is a privacy-preserving liquidity protocol with a physical cash substrate.
