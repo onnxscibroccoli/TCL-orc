@@ -1,0 +1,164 @@
+[
+  {
+    "label": "token",
+    "slot": "0",
+    "offset": 0,
+    "type": "contract IERC20"
+  },
+  {
+    "label": "verifier",
+    "slot": "1",
+    "offset": 0,
+    "type": "contract INoteDepositVerifier"
+  },
+  {
+    "label": "unit",
+    "slot": "2",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "denomAllowed",
+    "slot": "3",
+    "offset": 0,
+    "type": "mapping(uint32 => bool)"
+  },
+  {
+    "label": "costCap",
+    "slot": "4",
+    "offset": 0,
+    "type": "mapping(uint32 => uint256)"
+  },
+  {
+    "label": "notes",
+    "slot": "5",
+    "offset": 0,
+    "type": "mapping(uint256 => struct NoteController.Note)"
+  },
+  {
+    "label": "nullifierUsed",
+    "slot": "6",
+    "offset": 0,
+    "type": "mapping(uint256 => bool)"
+  },
+  {
+    "label": "buckets",
+    "slot": "7",
+    "offset": 0,
+    "type": "mapping(address => struct NoteController.Bucket)"
+  },
+  {
+    "label": "physicalOutstanding",
+    "slot": "8",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "pool",
+    "slot": "9",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "lockedTotal",
+    "slot": "10",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "rewardBps",
+    "slot": "11",
+    "offset": 0,
+    "type": "uint16"
+  },
+  {
+    "label": "epochLength",
+    "slot": "11",
+    "offset": 2,
+    "type": "uint64"
+  },
+  {
+    "label": "epochBudget",
+    "slot": "12",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "currentEpoch",
+    "slot": "13",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "spentInEpoch",
+    "slot": "14",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "theta",
+    "slot": "15",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "aggWindow",
+    "slot": "16",
+    "offset": 0,
+    "type": "uint64"
+  },
+  {
+    "label": "releaseWindow",
+    "slot": "16",
+    "offset": 8,
+    "type": "uint64"
+  },
+  {
+    "label": "registry",
+    "slot": "17",
+    "offset": 0,
+    "type": "contract IParamRegistry"
+  },
+  {
+    "label": "costCapBps",
+    "slot": "17",
+    "offset": 20,
+    "type": "uint16"
+  },
+  {
+    "label": "smallReserveBps",
+    "slot": "17",
+    "offset": 22,
+    "type": "uint16"
+  },
+  {
+    "label": "minCirculation",
+    "slot": "17",
+    "offset": 24,
+    "type": "uint64"
+  },
+  {
+    "label": "costCapAbs",
+    "slot": "18",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "smallBonus",
+    "slot": "19",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "spentLargeInEpoch",
+    "slot": "20",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "__gap",
+    "slot": "21",
+    "offset": 0,
+    "type": "uint256[26]"
+  }
+]

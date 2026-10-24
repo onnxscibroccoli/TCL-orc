@@ -1,5 +1,9 @@
 # TCL Setup
 
+> **In plain words.** This page shows how to install TCL on your own computer and run its tests. You type the commands shown in grey boxes into a terminal (the text window where you type commands). The basic install needs only Python and git. The proof tools (circom, snarkjs) and blockchain tools (Foundry) are only needed if you want to make proofs and run the contracts. Words like *daemon*, *container* and *circuit* are explained in the [Glossary](GLOSSARY.md).
+>
+> **What this means for you:** start with "Install" and "Run tests". If those pass, your setup works.
+
 ## Requirements
 
 - Python 3.11 or newer

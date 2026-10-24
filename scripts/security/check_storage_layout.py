@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONTRACTS = ["CirculatoryEngine"]
+CONTRACTS = ["CirculatoryEngine", "NoteController"]
 SNAP = Path(__file__).resolve().parents[2] / "docs" / "storage-layout"
 
 
