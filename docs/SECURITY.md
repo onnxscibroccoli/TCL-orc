@@ -44,7 +44,7 @@ Some words in the table:
 - **Every value is tied down.** Each value (*signal*) is set with `<==` or checked with `===`. Both make real equations.
   - The only exceptions are two *hints* written with `<--`: `DivConst.q` and `DivConst.r`. They are the answer and remainder of a division, supplied by the prover.
   - Both hints are then forced by the equation `num === q*den + r`. *Range checks* (proofs that a number sits inside a range) add `0 <= r <= den-1` and `q < 2^64` or `2^128`. Together these allow only the one correct answer.
-- **Numbers stay small, so nothing wraps around.** Proof math works like a clock: numbers wrap around at a huge prime. A cheater could try to exploit that. But balances are below `2^128`, the time step `dt` is at most 604,800 seconds (7 days), and every product stays below 2^200. That is far below the wrap point (about 2^254), so wrapping can't happen.
+- **Numbers stay small, so nothing wraps around.** Proof math works like a clock: numbers wrap around at a huge prime. A cheater could try to exploit that. But balances are below $`2^{128}`$ ($`B < 2^{128}`$), the time step is at most 604,800 seconds, 7 days ($`\Delta t \le 604\,800`$), and every product stays below $`2^{200}`$. That is far below the wrap point (about $`2^{254}`$), so wrapping can't happen.
 - **Path bits are 0 or 1.** The left/right choices on the way up the tree must be *boolean* (0 or 1). The equation `bit*(bit-1) === 0` forces this, because it only holds for 0 and 1.
   The old and new account leaves use the same path. So step 1 changes exactly one leaf.
 - **Full settle (account + vault).** The circuit proves both writes of `Ledger.settle`, one after the other:

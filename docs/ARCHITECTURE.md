@@ -94,8 +94,8 @@ Built in Phase 1:
 **The Merkle tree** (`src/tcl/ledger/poseidon_tree.py`). `PoseidonMerkleTree` is a binary Merkle tree (each node has two children) that is saved to disk (*persistent*).
 
 - Its *depth* (number of levels) can be 1 to 64. The default is 20. The depth is saved in `meta.tree_depth`. Reopening with a different depth fails with `StorageError`.
-- Each inner node is `Poseidon(left, right)`. Empty branches use pre-computed *zero hashes*: `Z0 = 0`, `Z[k+1] = Poseidon(Z[k], Z[k])`. Only non-empty nodes are stored.
-- Each account's *leaf* (bottom entry) is `Poseidon(sha256(label) mod p, balance, last_update)`. That is: the account name turned into a number, its balance, and when it was last updated.
+- Each inner node is `Poseidon(left, right)`. Empty branches use pre-computed *zero hashes*: $`Z_0 = 0`$, $`Z_{k+1} = \mathrm{Poseidon}(Z_k, Z_k)`$. Only non-empty nodes are stored.
+- Each account's *leaf* (bottom entry) is $`\mathrm{Poseidon}\bigl(\mathrm{sha256}(\mathrm{label}) \bmod p,\ B,\ t_{\mathrm{last}}\bigr)`$, where $B$ is the balance and $`t_{\mathrm{last}}`$ is `last_update`. That is: the account name turned into a number, its balance, and when it was last updated.
 - It can `update` a leaf. It can give a `proof` that a leaf is in the tree: the sibling codes from bottom to top, plus left/right path bits (the same `pathIndices` layout Circom uses). It can `verify` such a proof. `rebuild_root` recomputes the root from scratch, for checks.
 
 **The ledger service** (`src/tcl/ledger/service.py`). `Ledger` is the account book itself.
