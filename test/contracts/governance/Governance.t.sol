@@ -84,7 +84,7 @@ contract ParameterRegistryTest is GovernanceBase {
         assertEq(reg.get(R), 0.0005e18);
         assertEq(reg.get(reg.HOARD_MULTIPLIER()), 9);
         assertEq(reg.get(reg.MINT_REWARD()), 0.002e18);
-        assertEq(reg.keys().length, 12);
+        assertEq(reg.keys().length, 16);
         assertEq(reg.get(reg.VOTE_HALF_LIFE()), 7 days);
     }
 
