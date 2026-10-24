@@ -656,7 +656,8 @@ class Localnet:
         self._round_time = self.time
         self._seen, self._gossip_height = {}, height
         seated = set(self.vals_sorted)
-        live = [v for v in live if v.id in seated]  # non-seated nodes follow via catch-up
+        followers = [v for v in live if v.id not in seated]  # follow via catch-up
+        live = [v for v in live if v.id in seated]
         apps = {v.id: _HostApp(self, v) for v in live}
         engines = {v.id: TendermintEngine(apps[v.id], v.secret) for v in live}
         byz = {v.id for v in live if v.byzantine}
@@ -696,6 +697,9 @@ class Localnet:
                     if kind == "evidence":
                         self._gossip_in(dst, payload, engines, byz, push, now)
                         continue
+                    if kind == "vote-gossip":
+                        self._observe_vote(dst, payload, engines, byz, push, now)
+                        continue
                     if kind == "msg" and isinstance(payload, Vote) and dst not in byz:
                         self._observe_vote(dst, payload, engines, byz, push, now)
                     eng = engines[dst]
@@ -709,7 +713,8 @@ class Localnet:
                     now, _, kind, dst, payload = heapq.heappop(q)
                     if kind == "evidence":
                         self._gossip_in(dst, payload, engines, byz, push, now)
-                    elif kind == "msg" and isinstance(payload, Vote) and dst not in byz:
+                    elif kind == "vote-gossip" or (kind == "msg" and isinstance(payload, Vote)
+                                                   and dst not in byz):
                         self._observe_vote(dst, payload, engines, byz, push, now)
                 decided = {vid: a.decided for vid, a in apps.items() if a.decided}
                 hashes = {block_hash(d[0]["header"]) for d in decided.values()}
@@ -731,7 +736,7 @@ class Localnet:
                 break
         b = Block(blk["header"], blk["txs"], rc, blk["last_commit"], commit)
         self._append(b)
-        for v in live:  # validators that didn't decide (e.g. timed out) replay the commit
+        for v in live + followers:  # undecided / non-seated nodes replay the commit
             self._catch_up(v)
         return {"height": height, "hash": b.hash, "txs": len(txs),
                 "proposer": blk["header"]["proposer"], "signers": len(commit["sigs"]),
@@ -747,6 +752,12 @@ class Localnet:
         prev = seen.get(k)
         if prev is None:
             seen[k] = vote
+            # relay first-seen votes on the evidence-gossip channel (not fed to the engine,
+            # so consensus behaviour is unchanged); this is how a peer that only ever saw one
+            # side of an equivocation learns about the other side.
+            for peer in engines:
+                if peer != dst and peer not in byz:
+                    push(now + 1, "vote-gossip", peer, vote)
         elif prev.block_hash != vote.block_hash:
             self._gossip_in(dst, evidence_args(DuplicateVoteEvidence(prev, vote)), engines,
                             byz, push, now)

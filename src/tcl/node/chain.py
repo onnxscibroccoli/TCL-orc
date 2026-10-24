@@ -33,6 +33,7 @@ from ..consensus.validators import (Candidate, Reject as VReject, ValidatorParam
                                     ValidatorRegistry, draw_without_replacement)
 from . import groth16
 from .bn254 import R as FIELD_P
+from .encoding_helpers import anon_nullifier
 from .governance import GovError, Governance, GovState
 from .notes import NoteError, NotesModule, NotesState
 
@@ -186,7 +187,7 @@ class ChainState:
         else:
             if not isinstance(pub, list) or len(pub) != 4:
                 raise ModuleReject("BAD_PROOF", "public signals required")
-            nul = int(H(["tcl-anon-nullifier", [str(x) for x in pub]]), 16) % FIELD_P
+            nul = anon_nullifier(pub)
             if args.get("nullifier") != nul:
                 raise ModuleReject("BAD_PROOF", "nullifier not bound to proven statement")
             if not self._groth16("state_transition", proof, pub):
@@ -202,7 +203,7 @@ class ChainState:
             if module == "consensus":
                 return self._consensus(method, sender, a)
             if module == "notes":
-                return self._notes(method, sender, a, now)
+                return self._notes(method, sender, a, proof, now)
             if module == "governance":
                 return self._gov(method, sender, a, now)
         except (VReject, NoteError, GovError) as e:
@@ -240,7 +241,7 @@ class ChainState:
             raise ModuleReject("BAD_ARGS", "unknown validator")
         return ev
 
-    def _notes(self, method: str, sender: Optional[str], a: dict, now: int) -> list[dict]:
+    def _notes(self, method: str, sender: Optional[str], a: dict, proof: Any, now: int) -> list[dict]:
         if sender is None and method != "deposit":
             raise ModuleReject("UNAUTHORIZED")
         m = self.notes
@@ -258,7 +259,7 @@ class ChainState:
             rcpt = a.get("recipient")
             if not isinstance(rcpt, str) or not rcpt:
                 raise ModuleReject("BAD_ARGS")
-            imm, lk = m.deposit(a.get("id"), a.get("nullifier"), rcpt, a.get("proof"), now)
+            imm, lk = m.deposit(a.get("id"), a.get("nullifier"), rcpt, proof, now)
             return [{"type": "note_deposit", "id": str(a["id"]), "immediate": imm,
                      "locked": lk}]
         if method == "release":
