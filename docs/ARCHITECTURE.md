@@ -48,8 +48,8 @@ Implemented in Phase 1:
   Known-answer tests pin it to circomlib (`poseidon([1,2]) = 7853200120776062878684798364095072458815029376092732009249414926327459813530`).
 - `src/tcl/ledger/poseidon_tree.py`: `PoseidonMerkleTree`, a persistent binary Merkle tree.
   - Depth is a parameter (1–64, default 20) and is pinned in `meta.tree_depth`; reopening with another depth raises `StorageError`.
-  - Node `= Poseidon(left, right)`; empty subtrees use zero hashes `Z0 = 0`, `Z[k+1] = Poseidon(Z[k], Z[k])`. Only non-empty nodes are stored.
-  - Account leaf `= Poseidon(sha256(label) mod p, balance, last_update)`.
+  - Node `= Poseidon(left, right)`; empty subtrees use zero hashes $`Z_0 = 0`$, $`Z_{k+1} = \mathrm{Poseidon}(Z_k, Z_k)`$. Only non-empty nodes are stored.
+  - Account leaf $`= \mathrm{Poseidon}\bigl(\mathrm{sha256}(\mathrm{label}) \bmod p,\ B,\ t_{\mathrm{last}}\bigr)`$ ($B$ = balance, $`t_{\mathrm{last}}`$ = `last_update`).
   - `update`, `proof` (bottom-up siblings plus path bits, the circom `pathIndices` convention), `verify`, and `rebuild_root` for audits.
 - `src/tcl/ledger/service.py`: `Ledger` applies lazy demurrage on touch (`settle`), sends fees to the vault, and records an event log.
   - Every account write updates the account's leaf and appends `(seq, root, account, pre-image)` to `journal` in the same transaction.
