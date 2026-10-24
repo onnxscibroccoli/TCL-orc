@@ -1,15 +1,17 @@
-# TCL-orc — Thresholded Circulatory Ledger
+# TCL — Thresholded Circulatory Ledger
 
-Worktree orchestration framework for the Thresholded Circulatory Ledger (TCL): multi-agent parallel development, an off-chain Poseidon-Merkle demurrage ledger, Groth16 state-transition proofs, and on-chain settlement.
+**TCL is money for everyone. You get it, you spend it, just like a dollar.** The difference is in the rules behind it. Those rules are built so that no rich person, company or government can take control of it.
 
-> **Status:** research / pre-production. No external audit. Do not deploy to a network holding real value. See [`docs/SECURITY.md`](docs/SECURITY.md).
+> **Status: experiment, not real money yet.** Nobody outside the project has checked the code for security (there has been no *audit*). Some parts are stand-ins (*mocks*) for parts not built yet. Do not use it for anything of real value. See [`docs/SECURITY.md`](docs/SECURITY.md).
+
+New words are explained the first time they appear. They are also collected in the [Glossary](docs/GLOSSARY.md).
 
 ## Contents
 
-- [Overview](#overview)
-- [Quickstart](#quickstart)
-- [Architecture summary](#architecture-summary)
-- [White paper: the mathematics of TCL](#white-paper-the-mathematics-of-tcl)
+- [Part 1: TCL in one minute](#part-1-tcl-in-one-minute)
+- [Part 2: How to use it](#part-2-how-to-use-it)
+- [Part 3: How it is built](#part-3-how-it-is-built)
+- [Part 4: White paper: the mathematics of TCL](#white-paper-the-mathematics-of-tcl)
   - [1. Notation and units](#1-notation-and-units)
   - [2. Demurrage: the per-day linear rule](#2-demurrage-the-per-day-linear-rule)
   - [3. Demurrage: the fixed-point Taylor rule](#3-demurrage-the-fixed-point-taylor-rule)
@@ -27,32 +29,80 @@ Worktree orchestration framework for the Thresholded Circulatory Ledger (TCL): m
 - [Documentation](#documentation)
 - [License](#license)
 
-## Overview
+## Part 1: TCL in one minute
 
-TCL is a currency design in which balances above a personal immunity threshold $T$ slowly decay (*demurrage*). The decayed amount is not burned: it moves into a vault and can be redistributed. This repository implements:
+**What it is.** TCL is a kind of money. You can keep it in a digital account. Later you will also be able to carry it as paper-like notes.
 
-| Layer | What it does | Main code |
-|---|---|---|
-| Control plane | Task DAG, state machine, sibling git worktrees, Conflict Guard, daemon | `src/tcl/orchestrator/`, `src/tcl/worktree/`, `src/tcl/daemon.py` |
-| Off-chain ledger | Lazy demurrage, vault, nullifiers, Poseidon Merkle tree, SQLite WAL storage | `src/tcl/ledger/`, `src/tcl/storage/db.py` |
-| ZK proving | Circom `StateTransition(depth)` circuit, Groth16 prover | `circuits/`, `src/tcl/zk/` |
-| Settlement | `CirculatoryEngine` (UUPS, pausable, reentrancy-guarded) + Groth16 `StateVerifier` | `contracts/` |
-| Delivery | `tcl` / `tcl-cli` CLI, Containerfile, docker-compose, CI | `src/tcl/cli.py`, `Containerfile`, `.github/workflows/ci.yml` |
+**Why it exists.** With normal money, people who already have a lot can sit on it. A big pile of money gives them power over prices, politics and other people. TCL is designed so that this kind of pile slowly flows back to everyone.
 
-## Quickstart
+**The three big ideas:**
 
-Full prerequisites (git, Python 3.11+, Docker/Podman, Foundry, Circom, snarkjs) and walkthroughs are in [`docs/SETUP.md`](docs/SETUP.md). The short version:
+1. **Everyday amounts are never touched.** Every account has a large protected amount called the *threshold*. In the current code it is 5,000,000 TCL. Money at or below this line never shrinks.
+2. **Unused money above the line slowly drips back.** Only the part above the threshold, the *surplus*, shrinks. It loses 0.05% per day. This is called *demurrage* (say "deh-MUR-ij"), an old word for a fee on holding money. The money is not destroyed. It goes into a shared pot called the *vault*, and the vault pays it back out to people.
+3. **Cash you can hand over.** TCL notes work like bills in your wallet. You can give one to someone with no internet and no bank. A note never shrinks while it is paper.
+
+**A quick example.** Ana has 6,000,000 TCL. Her surplus is 6,000,000 − 5,000,000 = 1,000,000 TCL. One day of demurrage is 0.05% of 1,000,000, which is 500 TCL. That 500 goes to the vault. Ben has 40,000 TCL. That is far below the threshold, so Ben pays nothing, ever.
+
+**What this means for you:** if you use TCL for normal life, you pay no fees at all. The rules only bite people sitting on huge idle piles. Even then, they only touch the part above the line.
+
+**What is real today and what is not:**
+
+- Real and tested: the digital account system, the decay math, the proofs that the math was done right, and the on-chain contracts.
+- Stand-ins: the check that each account belongs to one real person (*proof of personhood*) is a mock. The secret setup used by the proofs (the *trusted setup*) was run by one developer, so it is for testing only. Physical notes are simulated; there is no real chip yet.
+- Not done: an outside security audit.
+
+## Part 2: How to use it
+
+Right now TCL is software for testers and developers. There is no app for shoppers yet. Here is what using it looks like today.
+
+**Step 1. Install it.** You need a computer with Python 3.11 or newer. *Python* is a programming language; the commands below install TCL's tools. Full details are in [`docs/SETUP.md`](docs/SETUP.md).
 
 ```bash
 pip install -r requirements-test.txt && pip install -e .   # deps + CLI
+```
+
+**Step 2. Check that it works.** This runs the automatic tests. Tests are small programs that check the code does what it should. Some proof tests are skipped if the proof tool `circom` is not installed.
+
+```bash
 pytest -q                         # unit + integration tests (ZK tests skip without circom)
+```
+
+**Step 3. Start a local test network.** This starts a practice blockchain on your own computer, plus TCL's background helper program (the *daemon*). Nothing here uses real money. You need Docker or Podman, which run programs in sealed boxes called *containers*.
+
+```bash
 docker compose up --build -d --wait   # anvil chain + daemon
 curl -fsS http://127.0.0.1:8787/health
 ```
 
-CLI reference: [`docs/API.md`](docs/API.md).
+If the last line prints a healthy status, it is running.
 
-## Architecture summary
+**Step 4. Check your setup.** `tcl doctor` lists anything missing.
+
+Every command is listed in [`docs/API.md`](docs/API.md). The steps for putting TCL on a public test network are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+**What this means for you:** today you can run TCL and watch the rules work. You cannot yet buy groceries with it.
+
+## Part 3: How it is built
+
+TCL has five layers. Think of a layer as one job in a team. Each one hands its work to the next.
+
+| Layer | Its job in plain words | What it does (technical) | Main code |
+|---|---|---|---|
+| Control plane | The manager that hands out and tracks work | Task DAG, state machine, sibling git worktrees, Conflict Guard, daemon | `src/tcl/orchestrator/`, `src/tcl/worktree/`, `src/tcl/daemon.py` |
+| Off-chain ledger | The account book that tracks who has what | Lazy demurrage, vault, nullifiers, Poseidon Merkle tree, SQLite WAL storage | `src/tcl/ledger/`, `src/tcl/storage/db.py` |
+| ZK proving | Makes a receipt proving the math was done right, without showing private details | Circom `StateTransition(depth)` circuit, Groth16 prover | `circuits/`, `src/tcl/zk/` |
+| Settlement | Public programs on a blockchain that check those receipts and hold funds | `CirculatoryEngine` (UUPS, pausable, reentrancy-guarded) + Groth16 `StateVerifier` | `contracts/` |
+| Delivery | The tools people use to run it | `tcl` / `tcl-cli` CLI, Containerfile, docker-compose, CI | `src/tcl/cli.py`, `Containerfile`, `.github/workflows/ci.yml` |
+
+Some words in that table:
+
+- A *ledger* is an account book. *Off-chain* means it is kept by TCL's own software, not on a public blockchain.
+- A *blockchain* is a shared record that many computers keep copies of, so no single one can secretly change it. *On-chain* means stored there.
+- A *smart contract* is a small program that lives on a blockchain and runs exactly as written.
+- *ZK* means *zero-knowledge*. A zero-knowledge proof convinces someone that a statement is true without showing the private details behind it. It is like proving you are over 18 without showing your birth date.
+- A *Merkle tree* is a way to boil a whole account book down to one short code, the *root*. Change any account and the root changes. So the root works like a fingerprint of the whole book.
+
+How a piece of work flows through the system:
 
 ```text
  tcl-cli ──► daemon (Unix socket, /health) ──► task DAG engine ──► sibling worktrees
@@ -68,15 +118,23 @@ CLI reference: [`docs/API.md`](docs/API.md).
                      CirculatoryEngine.settleEpoch ──► StateSettled event
 ```
 
-Tasks move through `PENDING → ALLOCATED → EXECUTING → VERIFYING → MERGED | FAILED`. Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+In words: you give a command. The daemon runs the work. The account book updates and gets a new fingerprint (root). A proof shows the update followed the rules. The blockchain contract checks the proof and records the new fingerprint.
+
+Developer tasks move through `PENDING → ALLOCATED → EXECUTING → VERIFYING → MERGED | FAILED`, meaning waiting, assigned, running, being checked, accepted or failed. Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
 ## White paper: the mathematics of TCL
 
+This part is the full technical specification. Each section starts with a short **In plain words** note, then gives the exact rules. You can read only the plain notes and still follow the story. The formulas are kept exactly as the code runs them.
+
 Every formula below is transcribed from the code that runs, with the source file named in each section. Where the prose specs in `docs/0*_*.md` disagree with the code, **the code is authoritative** and this section follows it.
 
 ### 1. Notation and units
+
+> **In plain words.** This section lists the letters used in the formulas. Amounts are stored as whole numbers in tiny units. One TCL is 10^18 (a 1 followed by 18 zeros) tiny units. This is the same trick as counting cents instead of dollars, just much finer, so no rounding surprises creep in. "Floor" means "round down to a whole number". The *threshold* T is 5,000,000 TCL. The daily rate r is 0.0005, which is 0.05% per day. The *surplus* is the part of a balance above T.
+>
+> **Example.** A balance of 6,000,000 TCL has a surplus of 1,000,000 TCL. A balance of 4,000,000 TCL has a surplus of 0.
 
 | Symbol | Meaning | Value in code |
 |---|---|---|
@@ -101,6 +159,10 @@ Balances at or below $T$ never decay.
 
 ### 2. Demurrage: the per-day linear rule
 
+> **In plain words.** This is the simple version of the decay rule. For each whole day, take 5 out of every 10,000 units of the surplus (0.05%). Round down. Never take more than the surplus. Leftover hours are saved for the next count, so nothing is lost or double charged.
+>
+> **Example.** Surplus 1,000,000 TCL, 30 days: 1,000,000 × 5 × 30 ÷ 10,000 = 15,000 TCL goes to the vault. The balance drops from 6,000,000 to 5,985,000 TCL. It can never drop below 5,000,000 TCL from decay alone.
+
 *Source: `src/tcl/ledger/demurrage.py` (`apply_demurrage`), used by `Ledger(mode="linear")`.*
 
 For an elapsed whole number of days $d$:
@@ -120,6 +182,10 @@ B' = B - \mathrm{fee}_{\mathrm{lin}}(B, d).
 In linear mode `Ledger.settle` consumes only whole days, $`d = \lfloor \Delta t / 86\,400 \rfloor`$, and advances `last_update` by $`86\,400\,d`$ so fractional days are carried forward rather than lost (`src/tcl/ledger/service.py`).
 
 ### 3. Demurrage: the fixed-point Taylor rule
+
+> **In plain words.** This is the default, more precise version. Instead of a flat charge per day, the surplus shrinks smoothly every second, the way a cooling cup of tea loses heat faster when it is hotter. Computers cannot use the exact curve with whole numbers. So the code uses a well-known shortcut: add up the first six terms of a series (a *Taylor series*) that closely matches the curve. Each step covers at most 7 days. A longer gap is done in several 7-day steps. A small fixed correction of 55 tiny units fixes rounding on steps of a day or more.
+>
+> **Example (run against the real code).** Balance 6,000,000 TCL, one day: fee ≈ 500.00004 TCL. Seven days: fee ≈ 3,494.75 TCL (a bit less than 7 × 500 because the surplus shrinks as it goes). Over a full year, about 16.69% of the surplus drips back. The protected 5,000,000 TCL never shrinks.
 
 *Source: `src/tcl/ledger/demurrage_fixed.py` (`apply_demurrage_fixed`), the default `Ledger(mode="fixed")`; mirrored for one step by `DemurrageStep` in `circuits/lib/fixedpoint.circom`.*
 
@@ -167,6 +233,10 @@ B' = B - \mathrm{fee}.
 
 ### 4. Vault, fee flow and redistribution
 
+> **In plain words.** Decay is *lazy*: it is only worked out when an account is used, like a library late fee that is totalled up when you return the book. The fee moves into the *vault*, a special shared account kept in slot 0 of the account book. The vault can pay money out to one account at a time. It can never pay out more than it holds. The idea of splitting the vault by how much work each person did is described in older docs but is **not built**.
+>
+> **What this means for you:** decayed money is never destroyed. It sits in the vault until it is paid out.
+
 *Source: `src/tcl/ledger/service.py` (`Ledger.settle`, `Ledger.redistribute`, `Ledger.deposit`), `src/tcl/ledger/demurrage.py` (`redistribute`).*
 
 Decay is *lazy*: it is applied only when an account is touched. Settling account $a$ at time $t_{\mathrm{now}}$ with stored $(B_a, t_a)$:
@@ -191,9 +261,13 @@ The vault is the reserved account `__vault__`, stored at Merkle leaf index $0$.
 0 \le u \le V \quad\Longrightarrow\quad V \leftarrow V - u,\qquad B_a \leftarrow B_a' + u,
 ```
 
-otherwise the call is rejected. The code exposes single-recipient transfers only; the work-weighted allocation $`\mathrm{Alloc}_r = V \cdot W_r / \sum_j W_j`$ described in `docs/03_orchestration_redistribution.md` is **not implemented**.
+otherwise the call is rejected. The code exposes single-recipient transfers only; the work-weighted allocation $`\mathrm{Alloc}_q = V \cdot W_q / \sum_j W_j`$ described in `docs/03_orchestration_redistribution.md` is **not implemented**.
 
 ### 5. Conservation invariants
+
+> **In plain words.** An *invariant* is a rule that must always stay true. Here it is: the vault plus every account must always add up to all the money ever deposited. Money only moves between pockets; it never appears or vanishes. The blockchain contract has the same rule for the funds it holds. Automated tests try many random actions and check this rule after each one.
+>
+> **Example.** Deposits total 10,000,000 TCL. After decay, accounts hold 9,999,500 TCL and the vault holds 500 TCL. 9,999,500 + 500 = 10,000,000. ✓
 
 **Off-chain** (`src/tcl/ledger/service.py`). Settlement and redistribution only move value between accounts and the vault, so with $D$ the total of all deposits:
 
@@ -211,6 +285,8 @@ Deposits are the only operation that changes the left-hand side.
 
 ### 6. Nullifiers and rollback
 
+> **In plain words.** A *nullifier* is a one-time code, like a ticket stub that is torn when used. Once a code is on the "spent" list, it can never be used again. This stops anyone spending the same money twice (*double spending*). A *rollback* undoes recent changes to the account book, for example after a crash. Rollback never removes codes from the spent list, so it cannot be used to spend something twice.
+
 *Source: `src/tcl/ledger/nullifiers.py`, `src/tcl/ledger/service.py` (`spend_nullifier`, `rollback`).*
 
 A nullifier is a field element $n \in \mathbb{F}_p$. The spent set $\mathcal{N}$ only grows:
@@ -222,6 +298,8 @@ A nullifier is a field element $n \in \mathbb{F}_p$. The spent set $\mathcal{N}$
 Uniqueness is by field element, not by proof bytes. Every ledger write appends $`(\mathrm{seq}, \mathrm{root}, a, \mathrm{prev})`$ to a journal. `rollback(R)` undoes entries newer than the latest one whose root equals $R$ and checks the resulting root equals $R$. **Nullifiers are never un-spent by a rollback**, which keeps rollback fail-closed against double spends.
 
 ### 7. Poseidon over BN254
+
+> **In plain words.** A *hash* is a blender for data: any input goes in, and a fixed-size code comes out. The same input always gives the same code, but you cannot work backwards, and changing one letter changes the whole code. *Poseidon* is a hash designed to be cheap inside zero-knowledge proofs. It works on numbers smaller than a huge prime number p (the *BN254 field*), and all math "wraps around" at p, like hours on a clock wrap at 12. This section gives its exact recipe: rounds of adding constants, raising to the 5th power and mixing. Account names are turned into numbers with a different, standard hash, SHA-256.
 
 *Source: `src/tcl/crypto/poseidon.py` (port of circomlibjs `poseidon_reference.js`; constants in `src/tcl/crypto/poseidon_bn254_t2_t5.json`; known-answer tests in `tests/test_poseidon.py`).*
 
@@ -263,6 +341,8 @@ Account identifiers map labels into the field with SHA-256:
 ```
 
 ### 8. The Poseidon Merkle state tree
+
+> **In plain words.** All accounts sit at the bottom of a tree. Each account becomes one hashed code (a *leaf*). Pairs of codes are hashed together, then pairs of those, up to a single code at the top: the *root*. The root is the fingerprint of the whole account book. To prove one account is in the book, you only need the codes along its path to the top (an *inclusion path*), not the whole book. The default tree has 20 levels, so it can hold 2^20 = 1,048,576 accounts. The test circuit uses 4 levels (16 accounts).
 
 *Source: `src/tcl/ledger/poseidon_tree.py`; circuit mirror `circuits/lib/merkle.circom`.*
 
@@ -306,6 +386,8 @@ b(b-1) = 0,\qquad \mathrm{left} = H + b\,(s - H),\qquad \mathrm{right} = H + s -
 Each leaf update recomputes the whole leaf-to-root path inside one SQLite transaction, so a crash cannot leave a half-updated path.
 
 ### 9. The state-transition statement
+
+> **In plain words.** This is exactly what each zero-knowledge proof promises. In short: "I started from the published root. I applied the decay rule correctly to one account. I added the fee to the vault. The result is this new root." Everyone can see the old root, new root, fee and time. Nobody sees the account's balance or name. The account is not allowed to pretend to be the vault.
 
 *Source: `circuits/puf_verify.circom` (`StateTransition(depth)`), main component `circuits/main/state_transition_d4.circom`, inputs built by `src/tcl/zk/prover.py`.*
 
@@ -358,6 +440,8 @@ Here $`\mathrm{id}_V = \mathrm{id}(\texttt{\_\_vault\_\_})`$ is hard-coded in th
 
 ### 10. Circuit constraints and range checks
 
+> **In plain words.** A proof *circuit* is a long list of equations that must all hold. This section lists the safety checks inside it. They make sure division is done honestly, numbers stay inside safe sizes, and nothing secretly "wraps around" the clock-like field math. *Range checks* prove a number is not too big, for example that a balance is below 2^128. The circuit has about 4,100 equations at depth 4.
+
 *Source: `circuits/lib/fixedpoint.circom`, `circuits/puf_verify.circom`; guarantees summarized in `docs/SECURITY.md`.*
 
 **Integer division by a constant** (`DivConst(den, qBits)`, the only `<--` hints in the repo). The prover supplies $q, r$; the circuit enforces
@@ -393,6 +477,10 @@ with $`0 \lt  \mathrm{den} \lt  2^{64}`$ and $`q_{\mathrm{bits}} \in \{64, 128\}
 
 ### 11. On-chain lazy O(1) decay
 
+> **In plain words.** The blockchain contract has its own, simpler decay rule: a straight-line charge per second on the part above its threshold. "O(1)" means each account is updated in one quick step when it is used, no matter how many accounts exist. The contract's threshold and rate are set when it is installed. The `tcl chain deploy` command sets both to 0 by default, which means **no decay on-chain unless someone sets them.**
+>
+> **Example (illustrative values, not defaults).** Threshold 100 TCL, rate 10^12 (that is 0.000001 per second), balance 150 TCL, 1,000 seconds: fee = 50 × 0.000001 × 1,000 = 0.05 TCL.
+
 *Source: `contracts/CirculatoryEngine.sol` (`_fee`, `_settle`, `balanceOf`).*
 
 The contract stores per account $`(B, t_{\mathrm{last}})`$ as `(uint128, uint64)` plus configurable `threshold` $\theta$ and `ratePerSecond` $\rho$ (scaled by $`10^{18}`$, at most $`10^{18}`$). The fee for elapsed $`\Delta t = \texttt{block.timestamp} - t_{\mathrm{last}}`$ is **linear per second**:
@@ -410,6 +498,8 @@ It is evaluated in constant time when the account is touched (`settle`, `deposit
 Note that $\theta$ and $\rho$ are deployment parameters, not the off-chain constants $T$ and $\Lambda$. `tcl chain deploy` (`src/tcl/chain/client.py`) defaults both to $0$.
 
 ### 12. Epoch settlement and StaleRoot
+
+> **In plain words.** An *epoch* is one round of recording. To record a round, someone sends the contract a proof plus its public numbers. The contract checks, in order: the numbers are valid, the proof starts from the root it has on file, the time moves forward but not into the future, and the proof is genuine. If the starting root does not match, it refuses with `StaleRoot` ("out of date"). That blocks replays, out-of-order proofs and forked histories. Only the appointed *settler* or the owner may submit.
 
 *Source: `contracts/CirculatoryEngine.sol` (`settleEpoch`).*
 
@@ -441,6 +531,8 @@ and it emits `StateSettled(epoch, oldRoot, newRoot, fee, newTime)`. Because $R$ 
 
 ### 13. Off-chain vs on-chain: what differs, what is proven
 
+> **In plain words.** TCL's own account book and the blockchain contract are two separate books. They use different decay rules. They are linked only by the roots recorded at settlement. Some actions (deposits, payouts) are not proven yet. Also: the proof setup was run by one person (testing only), the settler decides when rounds happen, and the owner is a single key. These must be fixed before real use.
+
 | Aspect | Off-chain ledger | On-chain `CirculatoryEngine` | Proven by ZK? |
 |---|---|---|---|
 | Decay law | Fixed-point Taylor $e^{-\lambda\Delta t}$, 7-day steps (or per-day linear mode) | Linear per second, $`(B-\theta)\rho\Delta t / 10^{18}`$ | Off-chain Taylor step **yes** (one step, $\le$ 7 days) |
@@ -455,6 +547,10 @@ The two decay functions are **different functions**; the off-chain ledger and on
 ---
 
 ## Physical currency (MVP, testnet only)
+
+> **In plain words.** These are TCL notes you can hold and hand over, like bills. Each note has a fixed value from 5 to 500 TCL. You make (*mint*) a note by turning digital TCL into it. When someone puts a note back into a digital account (*re-entry*), the note gets a fresh one-time code, so the same note can be used again and again but never cashed twice. Today the chip inside a note is **simulated in software**; no real notes exist.
+>
+> **Example.** You mint a 100 TCL note. Your account pays 100 TCL. If you report a production cost of 3 TCL and the reward rate is 1%, you get back 3 + 1 = 4 TCL from the shared incentive pool, so your net cost is 96 TCL. The cost refund is capped at 20 TCL (20%) and the reward at 1 TCL (1%). If the pool is empty you get nothing back and simply swap 100 for 100.
 
 **Damaged or worn notes are handled off-chain only** (owner decision L13, 2026-10-23). They are retired directly into off-chain transactions, with no on-chain damaged-note retirement, replacement or refund path. The production-cost credit C and mint reward R in §7 are unchanged.
 
