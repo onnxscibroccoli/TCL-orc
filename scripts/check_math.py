@@ -13,7 +13,12 @@ Usage: python3 scripts/check_math.py [--strict] [files...]
 Also lints for the pitfalls listed in docs/STYLE_MATH.md.
 """
 from __future__ import annotations
-import json, os, re, shutil, subprocess, sys
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent

@@ -9,16 +9,16 @@ It accepts four delimiters. We use the two that cannot be mangled by the Markdow
 
 | Use | Write | Do not write |
 | --- | --- | --- |
-| Display (own line) equation | a ` ```math ` fenced block | `$$ … $$` |
-| Inline formula inside a sentence | `` $`…`$ `` | `` `x = y` `` (code span) or bare ASCII |
+| Display (own line) equation | a ` ```math ` fenced block | <code>&#36;&#36; … &#36;&#36;</code> |
+| Inline formula inside a sentence | <code>&#36;&#96;…&#96;&#36;</code> | `` `x = y` `` (code span) or bare ASCII |
 
-Plain `$…$` is tolerated for a single symbol with no backslash, underscore, asterisk or brace (for example `$T$`, `$B$`), because there is nothing for Markdown to misread.
+Plain <code>&#36;…&#36;</code> is tolerated for a single symbol with no backslash, underscore, asterisk or brace (for example <code>&#36;T&#36;</code>, <code>&#36;B&#36;</code>), because there is nothing for Markdown to misread.
 
 ## Known GitHub pitfalls this avoids
 
-1. **Markdown runs before MathJax** in `$…$` and `$$…$$`: `_` and `*` can turn into italics, `\\` collapses to `\`, `\{` loses its backslash. Inside a math fence and the dollar-backtick inline form the text is passed through verbatim.
-2. **`$$` blocks break inside lists, tables and blockquotes**, and need blank lines around them. ` ```math ` fences always work.
-3. **A dollar sign next to a word or number** may or may not be read as a delimiter, depending on context. Write currency as `USD 5`, or `\$` inside math, or `<span>$</span>` in prose.
+1. **Markdown runs before MathJax** in <code>&#36;…&#36;</code> and <code>&#36;&#36;…&#36;&#36;</code>: `_` and `*` can turn into italics, `\\` collapses to `\`, `\{` loses its backslash. Inside a math fence and the dollar-backtick inline form the text is passed through verbatim.
+2. **<code>&#36;&#36;</code> blocks break inside lists, tables and blockquotes**, and need blank lines around them. ` ```math ` fences always work.
+3. **A dollar sign next to a word or number** may or may not be read as a delimiter, depending on context. Write currency as `USD 5`, or <code>\&#36;</code> inside math, or <code>&lt;span&gt;&#36;&lt;/span&gt;</code> in prose.
 4. **`|` inside a table cell** ends the cell even inside math. Use `\mid`, `\lvert…\rvert` or `\vert` in tables.
 5. **Multi-line display math** needs one environment: wrap rows in `\begin{aligned}…\end{aligned}` or `\begin{cases}…\end{cases}`; a bare `\\` outside an environment is ignored.
 6. **`\tag`** goes outside `aligned` (one tag per block), at the end of the block.
@@ -47,7 +47,7 @@ npm install --prefix /tmp/katex katex@0.16      # once, offline afterwards
 KATEX_DIR=/tmp/katex python3 scripts/check_math.py --strict
 ```
 
-The script finds every math expression in `README.md` and `docs/`, renders each with KaTeX (`throwOnError`), and lints for `$$` blocks.
+The script finds every math expression in `README.md` and `docs/`, renders each with KaTeX (`throwOnError`), and lints for <code>&#36;&#36;</code> blocks.
 KaTeX is stricter than MathJax, so passing it is a good proxy for rendering on GitHub.
 Without Node/KaTeX it skips (exit 0) unless `--strict` is passed, so it is safe to wire into CI as optional.
-To see GitHub's own rendering of a file: `gh api markdown -f mode=gfm -f text="$(cat docs/FILE.md)"`.
+To see GitHub's own rendering of a file: <code>gh api markdown -f mode=gfm -f text="&#36;(cat docs/FILE.md)"</code>.
