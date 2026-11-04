@@ -1,5 +1,8 @@
 name: Docs-as-Code Quality Gates
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     branches: [ main, develop ]
@@ -17,19 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
-      - name: Install Linting Dependencies
-        run: npm ci || npm install markdownlint-cli2
-
       - name: Execute Markdownlint-cli2
-        uses: DavidAnson/markdownlint-cli2-action@v24
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24
         with:
           config: '.markdownlint-cli2.mjs'
           globs: 'docs/**/*.md'
@@ -39,27 +39,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Vale CLI
-        uses: errata-ai/action-vale@v2
+        uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff # v3
         with:
+          files: docs
           vale_flags: "--minAlertLevel=warning"
           filter_mode: added
+          reporter: github-pr-annotations
           fail_on_error: true
-          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   math-katex-verification:
     name: Formal Math & KaTeX Parsing
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install KaTeX Parser
         run: npm install katex
@@ -73,12 +74,12 @@ jobs:
     needs: [markdown-structure-lint, prose-style-lint, math-katex-verification]
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Install Pandoc & LaTeX Engine
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic pandoc-citeproc
+          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic
 
       - name: Build PDF via XeLaTeX
         run: |
@@ -91,13 +92,14 @@ jobs:
             --number-sections \
             --toc \
             -V geometry:margin=1in \
-            -o build/cryptoeconomic_whitepaper.pdf || true
+            -o build/cryptoeconomic_whitepaper.pdf
 
       - name: Upload PDF Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: whitepaper-pdf
           path: build/cryptoeconomic_whitepaper.pdf
+          if-no-files-found: error
 
   deploy-staging-preview:
     name: Deploy GitHub Pages Staging Preview
@@ -106,7 +108,7 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Build Static Site Pages
         run: |
