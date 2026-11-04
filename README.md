@@ -6,6 +6,8 @@
 
 New words are explained the first time they appear. They are also collected in the [Glossary](docs/GLOSSARY.md).
 
+**Documentation CI status (2026-11-04):** A [measured quality-gate diagnosis](docs/QUALITY_GATE_BASELINE_2026-11-04.md) records a missing Vale action and 316 Markdown lint violations. The dependency/toolchain correction is under review; the outstanding documentation debt remains visible and must be resolved before calling the publication pipeline green. It does not alter ledger, consensus, or cryptographic invariants.
+
 ## Contents
 
 - [Part 1: TCL in one minute](#part-1-tcl-in-one-minute)
