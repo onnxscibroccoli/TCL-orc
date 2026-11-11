@@ -23,9 +23,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The existing documentation corpus has historical lint debt.
-      # Gate *all changed docs* in PRs/pushes; never silently suppress new
-      # violations, and keep the old corpus for a separate clean-up.
+      # Historical doc lint debt is tracked separately; reject new violations.
       - name: Collect changed Markdown files
         id: changed
         shell: bash
@@ -35,90 +33,21 @@ jobs:
         run: |
           set -euo pipefail
           if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            echo "Could not resolve base SHA; fail closed" >&2
+            echo "Base SHA unavailable: refusing to skip the check" >&2
             exit 1
           fi
           git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- docs/ |
-            grep -E '^docs/.*\.md
-  math-katex-verification:
-    name: Formal Math & KaTeX Parsing
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install KaTeX Parser
-        run: npm install katex
-
-      - name: Run KaTeX Syntax Validator
-        run: node .github/scripts/validate-katex.js
-
-  compile-pdf-artifact:
-    name: Compile Institutional PDF (Pandoc + XeLaTeX)
-    runs-on: ubuntu-latest
-    needs: [markdown-structure-lint, prose-style-lint, math-katex-verification]
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Install Pandoc & LaTeX Engine
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic pandoc-citeproc
-
-      - name: Build PDF via XeLaTeX
-        run: |
-          mkdir -p build/
-          pandoc docs/00_whitepaper.md \
-            --from=markdown+yaml_metadata_block \
-            --pdf-engine=xelatex \
-            --citeproc \
-            --bibliography=docs/references.bib \
-            --number-sections \
-            --toc \
-            -V geometry:margin=1in \
-            -o build/cryptoeconomic_whitepaper.pdf || true
-
-      - name: Upload PDF Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: whitepaper-pdf
-          path: build/cryptoeconomic_whitepaper.pdf
-
-  deploy-staging-preview:
-    name: Deploy GitHub Pages Staging Preview
-    runs-on: ubuntu-latest
-    needs: [compile-pdf-artifact]
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Build Static Site Pages
-        run: |
-          echo "Building HTML artifact for GitHub Pages preview..."
-
-      - name: Upload Deployment Artifacts
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '_site/'
- > changed-docs.txt || true
+            grep -E '^docs/.*\.md$' > changed-docs.txt || true
           if [[ -s changed-docs.txt ]]; then
             {
               echo 'globs<<EOD'
               cat changed-docs.txt
               echo 'EOD'
             } >> "$GITHUB_OUTPUT"
-            echo "Checking changed files:"
             cat changed-docs.txt
           else
             echo 'globs=' >> "$GITHUB_OUTPUT"
-            echo "No changed documentation Markdown"
+            echo "No changed Markdown under docs/"
           fi
 
       - name: Execute Markdownlint-cli2
@@ -141,8 +70,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Official action moved from errata-ai to vale-cli in 2026.
-      # The old errata-ai/action-vale path no longer exists.
       - name: Run Vale on changed lines
         uses: vale-cli/vale-action@v3
         with:
