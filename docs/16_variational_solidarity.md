@@ -1,4 +1,4 @@
-# 16 — Variational solidarity and consensus admission (experimental)
+# 16: Variational solidarity and consensus admission (experimental)
 
 **Status: opt-in mathematical prototype; not active on any network.**
 This design preserves the existing Tendermint-style BFT protocol: >2/3
