@@ -1,5 +1,8 @@
 # TCL — Thresholded Circulatory Ledger
 
+
+> **For technical reviewers:** [Source-linked capability evidence, executable checks and current limitations](docs/PORTFOLIO_READINESS.md) · [prioritized remediation issue](https://github.com/onnxscibroccoli/TCL-orc/issues/25). This is an experimental/software evidence portfolio, not an attestation of production operation or employment history.
+
 **TCL is money for everyone. You get it, you spend it, just like a dollar.** The difference is in the rules behind it. Those rules are built so that no rich person, company or government can take control of it.
 
 > **Status: experiment, not real money yet.** Nobody outside the project has checked the code for security (there has been no *audit*). Some parts are stand-ins (*mocks*) for parts not built yet. Do not use it for anything of real value. See [`docs/SECURITY.md`](docs/SECURITY.md).
