@@ -5,7 +5,7 @@ import pytest
 
 from tcl.consensus import ed25519
 from tcl.consensus.engine import TendermintEngine
-from tcl.consensus.sim import CHAIN_ID, SimApp, dev_secret
+from tcl.consensus.sim import CHAIN_ID, Network, SimApp, dev_secret
 from tcl.consensus.types import block_hash
 from tcl.consensus.variational_policy import (
     LagrangianPolicy, PolicyConfig, TransitionMetrics,
@@ -104,3 +104,35 @@ def test_consensus_gate_defaults_off_and_enabled_gate_needs_verified_host_eviden
     rejected = TendermintEngine(app, secrets[0], transition_policy=LagrangianPolicy())
     rejected.start(1)
     assert not rejected._valid_block(bh, block)
+
+
+def test_opt_in_bft_local_network_preserves_finality_and_liveness():
+    # All honest validators independently derive the same deterministic
+    # metrics. BFT quorum weights and signature verification stay unchanged.
+    net = Network(4, seed=17, byzantine=frozenset({0}))
+    for app in net.apps:
+        app.transition_metrics = lambda block, height: metrics()
+    for node in net.nodes:
+        node.transition_policy = LagrangianPolicy()
+    net.start()
+    net.run_until(350)
+    assert net.min_honest_height() >= 2
+    for a in net.honest():
+        for b in net.honest():
+            for height, block_id in net.decisions[a].items():
+                if height in net.decisions[b]:
+                    assert net.decisions[b][height] == block_id
+
+
+def test_unverified_concentration_rejects_consensus_candidates():
+    net = Network(4, seed=5)
+    for app in net.apps:
+        app.transition_metrics = lambda block, height: metrics(
+            previous_largest_share_ppm=260_000,
+            largest_share_ppm=261_000,
+        )
+    for node in net.nodes:
+        node.transition_policy = LagrangianPolicy()
+    net.start()
+    net.run_until(250)
+    assert net.min_honest_height() == 0
