@@ -74,7 +74,8 @@ jobs:
         uses: vale-cli/vale-action@v3
         with:
           files: docs
-          min_alert_level: warning
+          min_alert_level: error
+          reporter: github-pr-check
           filter_mode: added
           fail_on_error: true
 
@@ -107,7 +108,7 @@ jobs:
       - name: Install Pandoc & LaTeX Engine
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic pandoc-citeproc
+          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic
 
       - name: Build PDF via XeLaTeX
         run: |
@@ -115,18 +116,17 @@ jobs:
           pandoc docs/00_whitepaper.md \
             --from=markdown+yaml_metadata_block \
             --pdf-engine=xelatex \
-            --citeproc \
-            --bibliography=docs/references.bib \
             --number-sections \
             --toc \
             -V geometry:margin=1in \
-            -o build/cryptoeconomic_whitepaper.pdf || true
+            -o build/cryptoeconomic_whitepaper.pdf
 
       - name: Upload PDF Artifact
         uses: actions/upload-artifact@v4
         with:
           name: whitepaper-pdf
           path: build/cryptoeconomic_whitepaper.pdf
+          if-no-files-found: error
 
   deploy-staging-preview:
     name: Deploy GitHub Pages Staging Preview
@@ -137,9 +137,17 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      - name: Install Pandoc for HTML Preview
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
       - name: Build Static Site Pages
         run: |
-          echo "Building HTML artifact for GitHub Pages preview..."
+          set -euo pipefail
+          mkdir -p _site
+          pandoc --standalone --from=gfm --to=html5 docs/00_whitepaper.md -o _site/index.html
+          test -s _site/index.html
 
       - name: Upload Deployment Artifacts
         uses: actions/upload-pages-artifact@v3
