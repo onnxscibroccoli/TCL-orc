@@ -582,3 +582,13 @@ Known gaps: chip hardware is simulated, minting does not verify that a physical 
 ## License
 
 See [`LICENSE`](LICENSE).
+
+
+### Experimental variational solidarity policy
+
+The [Lagrangian admission-policy design](docs/16_variational_solidarity.md) adds a
+fixed-point, opt-in block-validity gate, **disabled by default**. It preserves
+equal-weight BFT and person-based governance; it does not prove personhood,
+force external adoption, or certify beneficial-owner concentration. No live
+activation is authorized until audited state-derived evidence, genesis-pinned
+parameters, independent review and network-wide compatibility exist.
