@@ -13,17 +13,17 @@ A Lagrangian can rank or reject *protocol transitions*; it cannot cause
 an outside company or person to adopt TCL. Participation is voluntary.
 The feasible objective is open infrastructure that is attractive through
 interoperability, lower fees/overhead, transparent governance, portable
-proofs and governance protections. External legal enforcement,
+proofs, and governance protections. External legal enforcement,
 compulsory routing or monopolization are explicitly **not** consensus powers.
 
 Let the evidence-derived state field at block height h be
 
-- p_h: distinct **verified** personhood nullifiers participating in a
-  governance-changing transition; P_h: eligible verified persons;
-- c_h: largest beneficial-owner share of circulating balances (PPM);
-- m_h: beneficial-owner HHI, i.e. sum_i (balance_i / supply)^2 (PPM);
-- w_h: independently metered verification workload units;
-- g_h and v_h: indicators for governance and value-changing transitions.
+- `p_h`: distinct **verified** personhood nullifiers participating in a
+  governance-changing transition; `P_h`: eligible verified persons;
+- `c_h`: largest beneficial-owner share of circulating balances (PPM);
+- `m_h`: beneficial-owner HHI, that is `sum_i (balance_i / supply)^2` (PPM);
+- `w_h`: independently metered verification workload units;
+- `g_h` and `v_h`: indicators for governance and value-changing transitions.
 
 All shares are integers in [0,10^6]. **Keys and wallet addresses are
 not persons or beneficial owners.** In particular, present mock identity
@@ -54,12 +54,12 @@ through versioned, timelocked, constitutionally authorized changes.
 
 Current prototype's hard constraints:
 
-1. For governance-changing transitions, p_h / P_h >= 0.10 by default.
+1. For governance-changing transitions, `p_h / P_h >= 0.10` by default.
    A new vote still must mature under existing conviction-voting rules.
-2. When c_h > 0.20, it cannot *increase* from c_(h-1). Likewise, when
-   m_h > 0.15, it cannot increase. This is a **repair corridor**, not
+2. When `c_h > 0.20`, it cannot *increase* from `c_(h-1)`. Likewise, when
+   `m_h > 0.15`, it cannot increase. This is a **repair corridor**, not
    retroactive confiscation or censorship of all transactions.
-3. w_h <= 50,000 verified work units; malformed/missing signals reject.
+3. `w_h <= 50,000` verified work units; malformed/missing signals reject.
 4. Empty and ordinary blocks do not require governance turnout.
 5. BFT safety assumptions and signature quorum remain unchanged.
 
@@ -91,9 +91,9 @@ preferences, remote APIs, or a noncanonical float in that path.
 ## Overhead-free solidarity: practical interpretation
 
 Use cryptographic evidence for enrollments, nullifiers, votes, commit
-certificates and provenance; automated quality gates make participation
+certificates, and provenance; automated quality gates make participation
 less bureaucratic. Local Git worktrees can independently validate
-proposed changes, generate reproducible witnesses and submit review
+proposed changes, generate reproducible witnesses, and submit review
 artifacts. GitHub Actions is a development orchestrator, **not** chain
 consensus. Recursive validation must have bounded depth, bounded work
 and independent test vectors, or a malicious witness can exhaust
@@ -105,9 +105,9 @@ independent audits require accountable human processes.
 
 1. Independently audit personhood and beneficial-owner aggregation,
    including attack models for Sybil attacks, splits/merges, exchanges,
-   privacy leakage and false positives.
+   privacy leakage, and false positives.
 2. Specify canonical proofs, soundness, state commitment, supply
-   denominator, aggregation arithmetic and metered work units.
+   denominator, aggregation arithmetic, and metered work units.
 3. Commit policy parameters and code hash to genesis or a
    constitutionally governed coordinated upgrade. Pin protocol tests
    and activate at one specific height.
@@ -117,7 +117,7 @@ independent audits require accountable human processes.
 5. Run deterministic cross-implementation vectors, partitions,
    Byzantine-safety and liveness tests, and economic simulations.
 6. Add public policy score/violation audit logs with no raw personal
-   identifiers, independent review, clear appeals and emergency halt.
+   identifiers, independent review, clear appeals, and emergency halt.
 7. Evaluate real transaction throughput, validation latency,
    inclusiveness and concentration over time; do not claim launch
    readiness until those measurements and external audits exist.
