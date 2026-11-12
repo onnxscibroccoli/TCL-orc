@@ -67,8 +67,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: write
-      pull-requests: read
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -80,7 +78,7 @@ jobs:
         with:
           files: docs
           min_alert_level: error
-          reporter: github-pr-check
+          reporter: github-pr-annotations
           filter_mode: added
           fail_on_error: true
 
