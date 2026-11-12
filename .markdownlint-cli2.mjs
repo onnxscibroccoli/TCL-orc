@@ -1,8 +1,6 @@
+// File selection belongs to the workflow or CLI arguments.
+// No implicit repo-wide glob: historical docs debt is tracked separately.
 export default {
-  globs: [
-    "docs/**/*.md"
-  ],
-
   ignores: [
     "node_modules",
     "build",
