@@ -598,6 +598,32 @@ Static workflow policy tests live in `tests/test_ci_release_gates.py`.
 These automated checks **do not** constitute independent production
 security certification. This remains a research testnet project.
 
+## TCL Virtual Gaming OS and Civitas-99 (alpha)
+
+The [playable vOS + Civitas-99 game](vos/README.md) now lives alongside the
+existing TCL ledger, **without connecting to or changing the ledger or
+consensus rules**. This first game includes a procedural civic city, work shifts,
+non-redeemable virtual credits, a seeded NPC market maker, price-time priority
+limit orders, order cancellation/refunds, resource conservation, cooperative
+public projects, and a keyboard-accessible browser interface.
+
+Start locally with:
+
+```bash
+python -m pip install -e .
+tcl vos serve --port 8765
+# Open http://127.0.0.1:8765/
+```
+
+You can also run `python -m tcl.vos demo` for deterministic trade output.
+Sessions save locally and replay through a SHA-256-linked journal.
+A browser WebAssembly worker runs only a capability-free score mini-game;
+a Java 17 host provides a JVM process supervisor. Neither should be confused
+with an audited third-party WASI game-mod runtime or production blockchain
+network. The main CI release DAG now depends on vOS Python/gameplay, JS/WASM,
+and JVM compilation tests. The game has **no purchase, cash-out, brokerage,
+or external exchange operations** and the demo server accepts only loopback.
+
 ## License
 
 See [`LICENSE`](LICENSE).
