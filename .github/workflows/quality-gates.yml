@@ -36,8 +36,126 @@ jobs:
             echo "Base SHA unavailable: refusing to skip the check" >&2
             exit 1
           fi
-          git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- docs/ |
-            grep -E '^docs/.*\.md$' > changed-docs.txt || true
+          # Do not mask a failed git diff with an allowed no-match grep exit.
+          git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- docs/ > changed-paths.txt
+          grep -E '^docs/.*\.md
+          if [[ -s changed-docs.txt ]]; then
+            {
+              echo 'globs<<EOD'
+              cat changed-docs.txt
+              echo 'EOD'
+            } >> "$GITHUB_OUTPUT"
+            cat changed-docs.txt
+          else
+            echo 'globs=' >> "$GITHUB_OUTPUT"
+            echo "No changed Markdown under docs/"
+          fi
+
+      - name: Execute Markdownlint-cli2
+        if: steps.changed.outputs.globs != ''
+        uses: DavidAnson/markdownlint-cli2-action@v24
+        with:
+          config: '.markdownlint-cli2.mjs'
+          globs: ${{ steps.changed.outputs.globs }}
+
+  prose-style-lint:
+    name: Prose Style & Terminology (changed lines)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: read
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Vale on changed lines
+        uses: vale-cli/vale-action@v3
+        with:
+          files: docs
+          min_alert_level: error
+          reporter: github-pr-check
+          filter_mode: added
+          fail_on_error: true
+
+  math-katex-verification:
+    name: Formal Math & KaTeX Parsing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install KaTeX Parser
+        run: npm install katex
+
+      - name: Run KaTeX Syntax Validator
+        run: node .github/scripts/validate-katex.js
+
+  compile-pdf-artifact:
+    name: Compile Institutional PDF (Pandoc + XeLaTeX)
+    runs-on: ubuntu-latest
+    needs: [markdown-structure-lint, prose-style-lint, math-katex-verification]
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Pandoc & LaTeX Engine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic
+
+      - name: Build PDF via XeLaTeX
+        run: |
+          mkdir -p build/
+          pandoc docs/00_whitepaper.md \
+            --from=markdown+yaml_metadata_block \
+            --pdf-engine=xelatex \
+            --number-sections \
+            --toc \
+            -V geometry:margin=1in \
+            -o build/cryptoeconomic_whitepaper.pdf
+
+      - name: Upload PDF Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: whitepaper-pdf
+          path: build/cryptoeconomic_whitepaper.pdf
+          if-no-files-found: error
+
+  deploy-staging-preview:
+    # Static preview artifact only. This job does NOT deploy to a public site.
+    name: Build GitHub Pages Preview Artifact (no deployment)
+    runs-on: ubuntu-latest
+    needs: [compile-pdf-artifact]
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Pandoc for HTML Preview
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
+      - name: Build Static Site Pages
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          pandoc --standalone --from=gfm --to=html5 docs/00_whitepaper.md -o _site/index.html
+          test -s _site/index.html
+
+      - name: Upload Deployment Artifacts
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site/'
+ changed-paths.txt > changed-docs.txt || test "$?" -eq 1
           if [[ -s changed-docs.txt ]]; then
             {
               echo 'globs<<EOD'
