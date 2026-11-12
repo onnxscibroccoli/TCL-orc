@@ -237,17 +237,26 @@ class TendermintEngine:
         if bh not in cache:
             valid = bool(self.app.validate_block(blk, self.height))
             if valid and self.transition_policy is not None:
-                # Fail closed if evidence is missing, malformed, or cannot be
-                # independently derived from committed state by this node.
-                source = getattr(self.app, "transition_metrics", None)
-                if not callable(source):
+                # Experimental gate requires both an application-verified
+                # genesis/upgrade commitment AND independently reconstructed
+                # metrics. Neither can be taken from proposer assertions.
+                metrics = getattr(self.app, "transition_metrics", None)
+                policy_hash = getattr(self.app, "policy_commitment", None)
+                if not callable(metrics) or not callable(policy_hash):
                     valid = False
                 else:
                     try:
-                        valid = self.transition_policy.evaluate(
-                            source(blk, self.height)
-                        ).admitted
-                    except (AttributeError, TypeError, ValueError):
+                        expected = self.transition_policy.commitment(self.app.chain_id)
+                        authorized = policy_hash(self.height)
+                        valid = type(authorized) is str and authorized == expected
+                        if valid:
+                            valid = self.transition_policy.evaluate(
+                                metrics(blk, self.height)
+                            ).admitted
+                    except Exception:
+                        # Malformed state/proof adapters must never approve
+                        # a block by accident. A halted node is preferable
+                        # to accepting divergent transition semantics.
                         valid = False
             cache[bh] = valid
         return cache[bh]
