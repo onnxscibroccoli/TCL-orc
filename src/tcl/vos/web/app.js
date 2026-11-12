@@ -81,7 +81,13 @@ function render() {
   if (!world.trades.length) tape.append(node("li", "No trades yet. Invite a second avatar and trade.","empty"));
   for(const t of world.trades) tape.append(node("li",`T${t.turn} · ${t.quantity} ${t.resource} @ ${t.price} CIV · ${t.buyer} ↔ ${t.seller}`));
 }
-$("identity-form").addEventListener("submit", e => {e.preventDefault(); actor = $("player-id").value.trim().toLowerCase();$("player-id").value=actor;localStorage.setItem("tcl-vos-actor",actor);action("join");});
+$("identity-form").addEventListener("submit", async e => {
+  e.preventDefault(); actor = $("player-id").value.trim().toLowerCase();
+  $("player-id").value=actor;localStorage.setItem("tcl-vos-actor",actor);
+  await load();
+  if(world && world.player){ notice(`Welcome back to Civitas-99, ${actor}.`);return; }
+  await action("join");
+});
 $("trade-form").addEventListener("submit", e => {e.preventDefault();const f=new FormData(e.currentTarget);
   action("order",{side:f.get("side"),resource:f.get("resource"),price:Number(f.get("price")),quantity:Number(f.get("quantity"))});});
 $("market-resource").addEventListener("change",render);
