@@ -584,7 +584,8 @@ Known gaps: chip hardware is simulated, minting does not verify that a physical 
 CI runs the consensus, offline, governance, zero-knowledge, contract, Python,
 security audit, deployment dry-run, and packaging checks on pull requests.
 **Version-tag publication is additionally gated** on a dedicated physical-note
-cryptographic test and all security jobs. The `image` job only smoke-tests
+cryptographic test, all security jobs, and a check that the tagged commit is
+reachable from the reviewed `main` branch. The `image` job only smoke-tests
 containers and cannot publish them. The `publish-image` job may publish
 to GHCR on version tags **only after every required gate succeeds**;
 `release` depends on successful publication.
