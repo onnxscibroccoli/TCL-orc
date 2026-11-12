@@ -124,7 +124,8 @@ def test_release_and_image_publish_are_tag_only():
     assert {"zk", "contracts"} <= _needs(note_gate)
     note_steps = "\\n".join(s.get("run", "") for s in note_gate["steps"])
     for evidence in ("circomspect", "TCL_REQUIRE_ZK", "test_notes_ledger.py",
-                     "test_note_zk.py", "NoteController.t.sol"):
+                     "test_note_zk.py", "NoteController.t.sol",
+                     "tests passed, 0 failed"):
         assert evidence in (note_steps + str(note_gate["steps"]))
 
 
