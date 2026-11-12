@@ -156,13 +156,28 @@ def test_randomized_market_conservation_and_replay():
     for _ in range(300):
         player = rng.choice(names)
         action = rng.choice(("work","trade","cancel","tick","contribute"))
-        if action=="work": request=cmd(player,"work",role=rng.choice(tuple(("solar","waterworks","recycling"))))
-        elif action=="trade": request=cmd(player,"order",side=rng.choice(("buy","sell")),resource=rng.choice(RESOURCES),price=rng.randint(1,40),quantity=rng.randint(1,9))
-        elif action=="cancel": request=cmd(player,"cancel",order_id=rng.randint(1,max(1,os.game.next_order)))
-        elif action=="tick": request=cmd(player,"advance",turns=1)
-        else: request=cmd(player,"contribute",project=rng.choice(tuple(("solar-microgrid","water-cooperative","circular-factory"))),quantity=rng.randint(1,8))
-        try: os.dispatch(request)
-        except GameError: pass
+        if action == "work":
+            request = cmd(player, "work", role=rng.choice(("solar", "waterworks", "recycling")))
+        elif action == "trade":
+            request = cmd(
+                player, "order", side=rng.choice(("buy", "sell")),
+                resource=rng.choice(RESOURCES), price=rng.randint(1, 40),
+                quantity=rng.randint(1, 9)
+            )
+        elif action == "cancel":
+            request = cmd(player, "cancel", order_id=rng.randint(1, max(1, os.game.next_order)))
+        elif action == "tick":
+            request = cmd(player, "advance", turns=1)
+        else:
+            request = cmd(
+                player, "contribute",
+                project=rng.choice(("solar-microgrid", "water-cooperative", "circular-factory")),
+                quantity=rng.randint(1, 8)
+            )
+        try:
+            os.dispatch(request)
+        except GameError:
+            pass
         os.game.check_conservation()
     assert GameOS.restore(os.export()).export() == os.export()
 
@@ -178,7 +193,8 @@ def test_local_json_session_roundtrip_and_atomic_replay(tmp_path):
     obj=json.loads(path.read_text())
     obj["journal"][1]["result"]["units"]=1000
     path.write_text(json.dumps(obj))
-    with pytest.raises(GameError): SessionStore(path)
+    with pytest.raises(GameError):
+        SessionStore(path)
 
 
 def test_http_loopback_accessibility_and_csrf(tmp_path):
