@@ -227,3 +227,20 @@ def test_host_event_bus_isolation_and_failed_observers():
     assert os.snapshot("alice")["os"]["observer_failures"] == 1
     assert GameOS.restore(os.export()).snapshot("alice")["player"]["id"] == "alice"
 
+
+def test_citybot_market_allows_solo_buy_and_sell():
+    store=SessionStore()
+    os=store.os
+    starting=os.snapshot()["books"]
+    for r in RESOURCES:
+        assert starting[r]["bids"] and starting[r]["asks"]
+        assert starting[r]["bids"][0]["owner"] == "citybot"
+    store.execute(cmd("alice", "join"))
+    out=store.execute(cmd("alice", "order", side="buy", resource="energy", price=12, quantity=2))
+    assert out["result"]["filled"] == 2
+    assert os.game.players["alice"].credits == 1200 - 24
+    out=store.execute(cmd("alice", "order", side="sell", resource="water", price=9, quantity=2))
+    assert out["result"]["filled"] == 2
+    assert os.game.players["alice"].credits == 1200 - 24 + 18
+    assert GameOS.restore(os.export()).export() == os.export()
+
