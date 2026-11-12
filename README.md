@@ -579,6 +579,25 @@ Known gaps: chip hardware is simulated, minting does not verify that a physical 
 | [`docs/11_physical_currency_spec.md`](docs/11_physical_currency_spec.md) | Physical currency specification (draft) |
 | `docs/00_whitepaper.md`, `docs/03_*`–`06_*` | Earlier research prose (not authoritative where it differs from code) |
 
+## CI/CD release integrity
+
+CI runs the consensus, offline, governance, zero-knowledge, contract, Python,
+security audit, deployment dry-run, and packaging checks on pull requests.
+**Version-tag publication is additionally gated** on a dedicated physical-note
+cryptographic test, all security jobs, and a check that the tagged commit is
+reachable from the reviewed `main` branch. The `image` job only smoke-tests
+containers and cannot publish them. The `publish-image` job may publish
+to GHCR on version tags **only after every required gate succeeds**;
+`release` depends on successful publication.
+
+The project also generates documentation PDF and HTML artifacts but does
+**not** automatically deploy GitHub Pages previews. CI cancels superseded
+pull-request runs, but never cancels releases or main-branch runs.
+
+Static workflow policy tests live in `tests/test_ci_release_gates.py`.
+These automated checks **do not** constitute independent production
+security certification. This remains a research testnet project.
+
 ## License
 
 See [`LICENSE`](LICENSE).

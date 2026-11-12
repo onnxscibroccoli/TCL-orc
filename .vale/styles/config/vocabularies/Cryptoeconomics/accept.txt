@@ -1,0 +1,18 @@
+# Cryptoeconomic engineering terms that are valid in TCL documentation.
+# One accepted term per line; this does not suppress unrelated Vale rules.
+beneficial-owner
+beneficial-ownership
+personhood
+nullifier
+nullifiers
+localnet
+timelocked
+mempool
+noncanonical
+tx
+Tendermint
+Groth16
+Sybil
+BFT
+HHI
+PPM
