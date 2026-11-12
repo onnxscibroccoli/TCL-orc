@@ -31,7 +31,7 @@ No root, Shizuku, Play Services, wallet, Java, or WASM package is needed for bas
 1. Enter a two-character-or-longer avatar name and select **Enter city**.
 2. Begin with **1,200 CIV** and eight units of each resource. Work a solar, water, or recycling shift to produce five more energy, water, or alloy units and gain reputation.
 3. Place a **buy** or **sell** limit order specifying price and quantity. The game uses FIFO price-time matching at the **resting maker's price**. Unfilled orders remain visible in the order book.
-4. Switch to another avatar (for example, `bob`) to join and trade as the counterparty. This is a local simulation, not player authentication. Cancel an unfilled order to release reserved credits or resources.
+4. The local city bot (`citybot`) posts starter **bid/ask liquidity** for all three resources, so you can trade solo immediately. You can also switch to a second avatar (for example, `bob`) to test person-to-person matching. This is local simulation, not player authentication. Cancel an unfilled order to release reserved credits or resources.
 5. Contribute resources to community projects. Each contribution builds your civic reputation; completing projects awards an additional achievement bonus.
 6. Advance a city turn to unlock another shift. City map tiles are procedurally and reproducibly generated from the world seed.
 
@@ -79,7 +79,7 @@ javac --release 17 -d /tmp/tcl-vos-jvm vos/jvm/src/com/tcl/vos/TclVosHost.java
 java -cp /tmp/tcl-vos-jvm com.tcl.vos.TclVosHost --help
 ```
 
-CI also runs a real WebAssembly arithmetic fixture using Node's `WebAssembly` API. The main TCL CI includes the new Python game tests; the dedicated `vos-game.yml` workflow checks Python versions, HTML/JS, and Java separately.
+CI also runs a real WebAssembly arithmetic fixture using Node's `WebAssembly` API. The main TCL CI includes the new Python game tests; the dedicated `vos-game` CI job checks Python, the browser's WASM fixture, and the Java 17 host. Tagged releases and container publication depend on that job.
 
 ### Future game milestones (not yet implemented)
 
