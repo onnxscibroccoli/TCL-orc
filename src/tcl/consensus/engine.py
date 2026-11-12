@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol, Union
 
 from . import ed25519
+from .variational_policy import LagrangianPolicy
 from .evidence import DuplicateVoteEvidence
 from .types import CommitCert, Proposal, Vote, verify_commit, block_hash, make_commit, quorum, sign_proposal, sign_vote
 
@@ -93,11 +94,15 @@ class _HeightState:
 
 
 class TendermintEngine:
-    def __init__(self, app: Application, secret: bytes, timeouts: Optional[Timeouts] = None):
+    def __init__(self, app: Application, secret: bytes, timeouts: Optional[Timeouts] = None,
+                 transition_policy: Optional[LagrangianPolicy] = None):
         self.app = app
         self.secret = secret
         self.me = ed25519.public_key(secret).hex()
         self.t = timeouts or Timeouts()
+        # Experimental admission gate; opt-in only with genesis-pinned parameters
+        # and independently verified application transition_metrics(block, height).
+        self.transition_policy = transition_policy
         self.height = -1
         self.evidence: list[DuplicateVoteEvidence] = []
         self._future: list[Union[Proposal, Vote]] = []
@@ -230,7 +235,30 @@ class TendermintEngine:
     def _valid_block(self, bh: str, blk: dict) -> bool:
         cache = self.hs.__dict__.setdefault("valid_cache", {})
         if bh not in cache:
-            cache[bh] = bool(self.app.validate_block(blk, self.height))
+            valid = bool(self.app.validate_block(blk, self.height))
+            if valid and self.transition_policy is not None:
+                # Experimental gate requires both an application-verified
+                # genesis/upgrade commitment AND independently reconstructed
+                # metrics. Neither can be taken from proposer assertions.
+                metrics = getattr(self.app, "transition_metrics", None)
+                policy_hash = getattr(self.app, "policy_commitment", None)
+                if not callable(metrics) or not callable(policy_hash):
+                    valid = False
+                else:
+                    try:
+                        expected = self.transition_policy.commitment(self.app.chain_id)
+                        authorized = policy_hash(self.height)
+                        valid = type(authorized) is str and authorized == expected
+                        if valid:
+                            valid = self.transition_policy.evaluate(
+                                metrics(blk, self.height)
+                            ).admitted
+                    except Exception:
+                        # Malformed state/proof adapters must never approve
+                        # a block by accident. A halted node is preferable
+                        # to accepting divergent transition semantics.
+                        valid = False
+            cache[bh] = valid
         return cache[bh]
 
     def _once_global(self, key: tuple) -> bool:

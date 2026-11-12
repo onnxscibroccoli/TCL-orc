@@ -582,3 +582,24 @@ Known gaps: chip hardware is simulated, minting does not verify that a physical 
 ## License
 
 See [`LICENSE`](LICENSE).
+
+
+### Experimental variational solidarity policy
+
+The [Lagrangian admission-policy design](docs/16_variational_solidarity.md) adds a
+fixed-point, opt-in block-validity gate, **disabled by default**. It preserves
+equal-weight BFT and person-based governance; it does not prove personhood,
+force external adoption, or certify beneficial-owner concentration. No live
+activation is authorized until audited state-derived evidence, an authenticated
+genesis/upgrade parameter commitment, an independently verified code hash,
+independent review, and network-wide compatibility exist.
+
+### CI/CD release protections
+
+Tagged distributions and container images are gated on the full consensus,
+security, offline, governance, packaging, and deployment-test matrix.
+The image smoke-test job cannot publish packages; `publish-image` executes
+only for version tags after its required checks pass, and the `release` job
+also requires image publication to succeed.
+See `tests/test_ci_release_gates.py` for static policy tests. These checks
+are software quality controls, **not** an external cryptographic audit.

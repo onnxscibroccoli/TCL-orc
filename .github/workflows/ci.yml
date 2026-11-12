@@ -6,6 +6,10 @@ on:
     tags: [ "v*" ]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CIRCOM_VERSION: v2.1.9
   CIRCOMSPECT_VERSION: 0.9.0
@@ -216,9 +220,54 @@ jobs:
       - if: always()
         run: docker compose down -v
 
+  release-notes:
+    # This check runs on version tags: notes verification cannot be bypassed
+    # just because physical-notes.yml normally runs on PRs and main pushes.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [zk, contracts]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install circuit compiler
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL -o "$HOME/.local/bin/circom" \
+            "https://github.com/iden3/circom/releases/download/${CIRCOM_VERSION}/circom-linux-amd64"
+          chmod +x "$HOME/.local/bin/circom"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/circomspect
+          key: circomspect-${{ env.CIRCOMSPECT_VERSION }}
+      - name: Install circomspect
+        run: command -v circomspect || cargo install --locked circomspect --version "$CIRCOMSPECT_VERSION"
+      - name: Static review of note circuit
+        run: circomspect -L node_modules circuits/note/note_deposit.circom
+      - run: pip install -r requirements-test.txt && pip install -e .
+      - name: Mandatory note ledger and zero-knowledge tests
+        env:
+          TCL_REQUIRE_ZK: "1"
+        run: pytest -q tests/test_notes_ledger.py tests/test_note_zk.py
+      - name: Mandatory note controller tests
+        run: forge test -vv --match-path test/contracts/NoteController.t.sol
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [pytest, lint, zk, contracts, integration, compose, rootless-container, wheel, deploy-dryrun, image]
+    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, release-notes, publish-image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -268,13 +317,10 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag $pre
 
   image:
-    # PRs/main: build + smoke-test only. v* tags: push to GHCR, SBOM, cosign, provenance.
+    # Build and smoke-test only; never publish unverified tags from this job.
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/tcl-orc
     steps:
@@ -299,14 +345,29 @@ jobs:
           for i in $(seq 30); do curl -fsS http://127.0.0.1:8787/readyz && break; sleep 1; done
           curl -fsS http://127.0.0.1:8787/readyz && curl -fsS http://127.0.0.1:8787/livez
           docker rm -f tcl
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: docker/login-action@v3
+  publish-image:
+    # A tag cannot push a public GHCR image until ALL security/consensus gates succeed.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, release-notes]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/tcl-orc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - if: startsWith(github.ref, 'refs/tags/v')
-        id: meta
+      - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
@@ -315,8 +376,7 @@ jobs:
             type=sha
           labels: |
             org.opencontainers.image.licenses=Apache-2.0
-      - if: startsWith(github.ref, 'refs/tags/v')
-        id: push
+      - id: push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -328,28 +388,25 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           sbom: true
           provenance: mode=max
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: anchore/sbom-action@v0
+      - uses: anchore/sbom-action@v0
         with:
           image: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
           format: spdx-json
           output-file: image.spdx.json
           upload-release-assets: false
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: sigstore/cosign-installer@v3
-      - if: startsWith(github.ref, 'refs/tags/v')
-        name: cosign keyless sign image + attach SBOM attestation
+      - uses: sigstore/cosign-installer@v3
+      - name: cosign keyless sign image + attach SBOM attestation
         env:
           REF: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
         run: |
           cosign sign --yes "$REF"
           cosign attest --yes --type spdxjson --predicate image.spdx.json "$REF"
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
 
   deploy-dryrun:
     # forge deploy/upgrade scripts against a throwaway anvil + fail-closed guard check
