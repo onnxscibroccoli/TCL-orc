@@ -280,8 +280,12 @@ jobs:
         env:
           TCL_REQUIRE_ZK: "1"
         run: pytest -q tests/test_notes_ledger.py tests/test_note_zk.py
-      - name: Mandatory note controller tests
-        run: forge test -vv --match-path test/contracts/NoteController.t.sol
+      - name: Mandatory note controller tests (nonzero count, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          forge test -vv --match-path test/contracts/NoteController.t.sol | tee /tmp/note-tests.txt
+          grep -Eq '[1-9][0-9]* tests passed, 0 failed' /tmp/note-tests.txt
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
