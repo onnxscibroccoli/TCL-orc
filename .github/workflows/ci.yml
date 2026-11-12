@@ -220,6 +220,24 @@ jobs:
       - if: always()
         run: docker compose down -v
 
+  release-origin:
+    # Reject a release tag pointing at any unmerged feature branch commit.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require tagged commit to be reachable from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+          echo "tag commit $GITHUB_SHA is reachable from origin/main"
+
   release-notes:
     # This check runs on version tags: notes verification cannot be bypassed
     # just because physical-notes.yml normally runs on PRs and main pushes.
@@ -267,7 +285,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, release-notes, publish-image]
+    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, release-notes, release-origin, publish-image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -348,7 +366,7 @@ jobs:
   publish-image:
     # A tag cannot push a public GHCR image until ALL security/consensus gates succeed.
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, release-notes]
+    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, release-notes, release-origin]
     runs-on: ubuntu-latest
     permissions:
       contents: read
