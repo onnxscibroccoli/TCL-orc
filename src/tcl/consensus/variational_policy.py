@@ -102,7 +102,7 @@ class LagrangianPolicy:
         canonical = json.dumps(
             payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
         ).encode("ascii")
-        return sha256(b"TCL-VARIATIONAL-V1\\x00" + canonical).hexdigest()
+        return sha256(b"TCL-VARIATIONAL-V1\x00" + canonical).hexdigest()
 
     def evaluate(self, metrics: TransitionMetrics) -> PolicyDecision:
         if not isinstance(metrics, TransitionMetrics):
