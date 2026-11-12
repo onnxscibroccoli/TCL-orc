@@ -30,8 +30,55 @@ CRITICAL = {
 }
 
 
+class _StrictYamlLoader(yaml.SafeLoader):
+    """Fail on duplicate YAML keys, which ordinary safe_load silently drops."""
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    None, None, f"duplicate workflow key: {key}", key_node.start_mark
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+def test_all_workflow_files_parse_without_duplicate_keys():
+    workflows = sorted((REPO / ".github" / "workflows").glob("*.yml"))
+    assert workflows
+    for workflow in workflows:
+        doc = yaml.load(workflow.read_text(encoding="utf-8"), Loader=_StrictYamlLoader)
+        assert isinstance(doc, dict) and isinstance(doc.get("jobs"), dict)
+        assert doc["jobs"], workflow
+
+
+def test_docs_workflow_changes_fail_closed_and_never_claim_to_deploy():
+    doc = yaml.load(
+        (REPO / ".github" / "workflows" / "quality-gates.yml").read_text(encoding="utf-8"),
+        Loader=_StrictYamlLoader,
+    )
+    jobs = doc["jobs"]
+    assert set(jobs) == {
+        "markdown-structure-lint", "prose-style-lint", "math-katex-verification",
+        "compile-pdf-artifact", "deploy-staging-preview",
+    }
+    collect = next(step for step in jobs["markdown-structure-lint"]["steps"]
+                   if step.get("id") == "changed")
+    shell = collect["run"]
+    assert "git diff --name-only" in shell
+    assert "changed-paths.txt" in shell
+    assert "grep -E" in shell
+    assert "|| true" not in shell
+    preview = jobs["deploy-staging-preview"]
+    assert "no deployment" in preview["name"]
+    assert all("actions/deploy-pages" not in step.get("uses", "")
+               for step in preview["steps"])
+
+
 def _jobs():
-    data = yaml.safe_load(CI.read_text(encoding="utf-8"))
+    data = yaml.load(CI.read_text(encoding="utf-8"), Loader=_StrictYamlLoader)
     return data["jobs"]
 
 
