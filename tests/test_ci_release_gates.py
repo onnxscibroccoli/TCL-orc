@@ -28,6 +28,7 @@ CRITICAL = {
     "forge-security",
     "dependency-audit",
     "release-notes",
+    "release-origin",
 }
 
 
@@ -109,6 +110,11 @@ def test_release_and_image_publish_are_tag_only():
         assert CRITICAL <= _needs(jobs[key]), key
     assert "publish-image" in _needs(jobs["release"])
     assert CRITICAL <= set(jobs), "missing mandatory CI security jobs"
+    origin_gate = jobs["release-origin"]
+    assert "refs/tags/v" in origin_gate["if"]
+    origin_shell = "\\n".join(s.get("run", "") for s in origin_gate["steps"])
+    assert "git merge-base --is-ancestor" in origin_shell
+    assert "refs/remotes/origin/main" in origin_shell
     note_gate = jobs["release-notes"]
     assert "refs/tags/v" in note_gate["if"]
     assert {"zk", "contracts"} <= _needs(note_gate)
