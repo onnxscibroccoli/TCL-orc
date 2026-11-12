@@ -55,6 +55,20 @@ def test_all_workflow_files_parse_without_duplicate_keys():
         assert doc["jobs"], workflow
 
 
+def test_superseded_pr_runs_cancel_but_release_tags_never_cancel():
+    workflows = sorted((REPO / ".github" / "workflows").glob("*.yml"))
+    for workflow in workflows:
+        config = yaml.load(
+            workflow.read_text(encoding="utf-8"), Loader=_StrictYamlLoader
+        )
+        concurrency = config["concurrency"]
+        assert "github.workflow" in concurrency["group"]
+        assert "github.event.pull_request.number" in concurrency["group"]
+        assert concurrency["cancel-in-progress"] == (
+            "${{ github.event_name == 'pull_request' }}"
+        )
+
+
 def test_docs_workflow_changes_fail_closed_and_never_claim_to_deploy():
     doc = yaml.load(
         (REPO / ".github" / "workflows" / "quality-gates.yml").read_text(encoding="utf-8"),
