@@ -7,7 +7,9 @@ The policy is opt-in pending genesis pinning and audited personhood proofs.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from hashlib import sha256
+import json
 
 PPM = 1_000_000
 
@@ -31,8 +33,8 @@ class PolicyConfig:
             raise ValueError("policy PPM thresholds must be integer in [0, 1000000]")
         weights = (self.voice_weight, self.capital_weight,
                    self.monopoly_weight, self.work_weight)
-        if any(type(w) is not int or w < 0 for w in weights):
-            raise ValueError("policy weights must be nonnegative integers")
+        if any(type(w) is not int or not 0 <= w <= PPM for w in weights):
+            raise ValueError("policy weights must be integer in [0, 1000000]")
         if type(self.max_work_units) is not int or self.max_work_units <= 0:
             raise ValueError("max_work_units must be positive integer")
 
@@ -82,6 +84,25 @@ class LagrangianPolicy:
 
     def __init__(self, config: PolicyConfig | None = None) -> None:
         self.config = config or PolicyConfig()
+
+    def commitment(self, chain_id: str) -> str:
+        """Canonical domain-separated parameter hash for genesis/upgrade pinning.
+
+        This binds parameters and chain identity, but the application must
+        independently verify that the returned commitment is authorized by
+        *committed genesis/upgrade state*. A caller-supplied string is not proof.
+        """
+        if type(chain_id) is not str or not chain_id.strip():
+            raise ValueError("chain_id must be a nonempty string")
+        payload = {
+            "schema": "tcl.variational_policy.v1",
+            "chain_id": chain_id,
+            "parameters": asdict(self.config),
+        }
+        canonical = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii")
+        return sha256(b"TCL-VARIATIONAL-V1\\x00" + canonical).hexdigest()
 
     def evaluate(self, metrics: TransitionMetrics) -> PolicyDecision:
         if not isinstance(metrics, TransitionMetrics):
