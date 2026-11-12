@@ -216,9 +216,54 @@ jobs:
       - if: always()
         run: docker compose down -v
 
+  release-notes:
+    # This check runs on version tags: notes verification cannot be bypassed
+    # just because physical-notes.yml normally runs on PRs and main pushes.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [zk, contracts]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install circuit compiler
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL -o "$HOME/.local/bin/circom" \
+            "https://github.com/iden3/circom/releases/download/${CIRCOM_VERSION}/circom-linux-amd64"
+          chmod +x "$HOME/.local/bin/circom"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/circomspect
+          key: circomspect-${{ env.CIRCOMSPECT_VERSION }}
+      - name: Install circomspect
+        run: command -v circomspect || cargo install --locked circomspect --version "$CIRCOMSPECT_VERSION"
+      - name: Static review of note circuit
+        run: circomspect -L node_modules circuits/note/note_deposit.circom
+      - run: pip install -r requirements-test.txt && pip install -e .
+      - name: Mandatory note ledger and zero-knowledge tests
+        env:
+          TCL_REQUIRE_ZK: "1"
+        run: pytest -q tests/test_notes_ledger.py tests/test_note_zk.py
+      - name: Mandatory note controller tests
+        run: forge test -vv --match-path test/contracts/NoteController.t.sol
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, publish-image]
+    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, release-notes, publish-image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -299,7 +344,7 @@ jobs:
   publish-image:
     # A tag cannot push a public GHCR image until ALL security/consensus gates succeed.
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit]
+    needs: [pytest, lint, zk, offline, no-ethereum, contracts, governance, rootless-container, integration, compose, image, wheel, deploy-dryrun, slither, forge-security, dependency-audit, release-notes]
     runs-on: ubuntu-latest
     permissions:
       contents: read
