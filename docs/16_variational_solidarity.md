@@ -75,9 +75,21 @@ denominator; present code has no such adapter.
 `PolicyDecision` with exact violation codes. `TendermintEngine`
 accepts an optional `transition_policy`. If enabled, its existing
 `_valid_block` path checks both the application's standard block
-validation and `app.transition_metrics(block, height)`; the latter
-must be an independently verified pure function. Missing/malformed
-signals fail closed. The result is cached by block hash per height.
+validation, a chain-bound policy commitment, and
+`app.transition_metrics(block, height)`. The application must independently
+verify that `app.policy_commitment(height)` comes from an authorized genesis
+or coordinated upgrade, and that it matches
+`LagrangianPolicy.commitment(app.chain_id)`. The canonical SHA-256 hash uses
+versioned, sorted JSON parameters and a domain separator. It binds parameters
+to the chain but **does not prove or commit to the implementation code hash**.
+A genuine source-code or build-artifact commitment still requires a separate
+protocol-level upgrade mechanism.
+
+The metrics callback must independently reconstruct values from previously
+committed state and independently verifiable transition evidence. Missing or
+malformed commitments and metrics fail closed. The decision is cached by block
+hash per height. Mock application callbacks in tests verify software logic,
+not the authenticity of real personhood or beneficial-ownership proofs.
 
 **Default is disabled.** No app currently provides the required audited
 beneficial-owner and proof-of-personhood metrics. Enabling different
@@ -108,9 +120,10 @@ independent audits require accountable human processes.
    privacy leakage, and false positives.
 2. Specify canonical proofs, soundness, state commitment, supply
    denominator, aggregation arithmetic, and metered work units.
-3. Commit policy parameters and code hash to genesis or a
-   constitutionally governed coordinated upgrade. Pin protocol tests
-   and activate at one specific height.
+3. Commit the policy commitment plus separately verified implementation
+   code hash to genesis or an approved coordinated upgrade. Implement an
+   authenticated, replayable `policy_commitment(height)` application method.
+   Pin protocol tests and activate only at an approved block height.
 4. Extend localnet/production host with evidence-derived
    `transition_metrics(block, height)`; independently reconstruct all
    metrics during block replay. Never accept metrics from a tx alone.
