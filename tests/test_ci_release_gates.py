@@ -27,6 +27,7 @@ CRITICAL = {
     "slither",
     "forge-security",
     "dependency-audit",
+    "release-notes",
 }
 
 
@@ -94,6 +95,13 @@ def test_release_and_image_publish_are_tag_only():
         assert CRITICAL <= _needs(jobs[key]), key
     assert "publish-image" in _needs(jobs["release"])
     assert CRITICAL <= set(jobs), "missing mandatory CI security jobs"
+    note_gate = jobs["release-notes"]
+    assert "refs/tags/v" in note_gate["if"]
+    assert {"zk", "contracts"} <= _needs(note_gate)
+    note_steps = "\\n".join(s.get("run", "") for s in note_gate["steps"])
+    for evidence in ("circomspect", "TCL_REQUIRE_ZK", "test_notes_ledger.py",
+                     "test_note_zk.py", "NoteController.t.sol"):
+        assert evidence in (note_steps + str(note_gate["steps"]))
 
 
 def test_pr_smoke_job_cannot_publish_or_sign_images():
