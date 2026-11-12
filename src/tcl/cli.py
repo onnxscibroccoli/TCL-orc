@@ -28,6 +28,8 @@ app.add_typer(task_app, name="task")
 app.add_typer(daemon_app, name="daemon")
 from .offline_cli import offline_app  # noqa: E402  (stdlib-only bundle tooling)
 app.add_typer(offline_app, name="offline")
+from .vos.cli import vos_app  # noqa: E402
+app.add_typer(vos_app, name="vos")
 zk_app = typer.Typer(help="Groth16 proving (circom + snarkjs)", no_args_is_help=True)
 chain_app = typer.Typer(help="EVM settlement (anvil/forge/cast)", no_args_is_help=True)
 app.add_typer(zk_app, name="zk")
