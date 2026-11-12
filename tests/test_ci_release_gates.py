@@ -87,6 +87,10 @@ def test_docs_workflow_changes_fail_closed_and_never_claim_to_deploy():
     assert "changed-paths.txt" in shell
     assert "grep -E" in shell
     assert "|| true" not in shell
+    prose = jobs["prose-style-lint"]
+    assert prose["permissions"] == {"contents": "read"}
+    assert next(step["with"]["reporter"] for step in prose["steps"]
+                if "vale-action" in step.get("uses", "")) == "github-pr-annotations"
     preview = jobs["deploy-staging-preview"]
     assert "no deployment" in preview["name"]
     assert all("actions/deploy-pages" not in step.get("uses", "")
