@@ -68,11 +68,14 @@ def test_pr_smoke_job_cannot_publish_or_sign_images():
 def test_release_keeps_keyless_signing_and_provenance():
     jobs = _jobs()
     publishing = jobs["publish-image"]
-    steps = "\n".join(str(step) for step in publishing["steps"])
-    for expected in ("sbom: true", "provenance", "cosign sign", "cosign attest",
-                     "attest-build-provenance"):
-        # `str(dict)` does not produce YAML, so search values or repr keys.
-        assert expected in steps, expected
+    steps = publishing["steps"]
+    build = next(s for s in steps if "docker/build-push-action" in s.get("uses", ""))
+    assert build["with"]["push"] is True
+    assert build["with"]["sbom"] is True
+    assert build["with"]["provenance"] == "mode=max"
+    scripts = "\n".join(s.get("run", "") for s in steps)
+    assert "cosign sign" in scripts and "cosign attest" in scripts
+    assert any("attest-build-provenance" in s.get("uses", "") for s in steps)
     release = jobs["release"]
     assert release["permissions"]["contents"] == "write"
     assert release["permissions"]["id-token"] == "write"
