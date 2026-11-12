@@ -28,6 +28,8 @@ class SessionStore:
         self.path = Path(path) if path is not None else None
         self.lock = RLock()
         self.os = GameOS(seed=seed)
+        if self.path is None or not self.path.is_file():
+            self._seed_city_market()
         if self.path is not None and self.path.is_file():
             if self.path.stat().st_size > MAX_SAVE:
                 raise GameError("saved world exceeds the local prototype limit")
@@ -35,6 +37,17 @@ class SessionStore:
                 self.os = GameOS.restore(json.loads(self.path.read_text(encoding="utf-8")))
             except (ValueError, TypeError, KeyError) as exc:
                 raise GameError("saved world failed deterministic replay") from exc
+
+    def _seed_city_market(self) -> None:
+        """Provide a clearly fictional NPC counterparty for first-time solo play."""
+        bot = "citybot"
+        self.os.dispatch({"game": "civitas99", "actor": bot, "action": "join", "params": {}})
+        for resource, bid, ask in (("energy", 7, 12), ("water", 9, 15),
+                                   ("alloy", 11, 18)):
+            for side, price, qty in (("sell", ask, 5), ("buy", bid, 12)):
+                self.os.dispatch({"game": "civitas99", "actor": bot,
+                                  "action": "order", "params": {"side": side,
+                                  "resource": resource, "price": price, "quantity": qty}})
 
     def persist(self) -> None:
         if self.path is None:
