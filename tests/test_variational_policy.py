@@ -96,6 +96,13 @@ def test_consensus_gate_defaults_off_and_enabled_gate_needs_verified_host_eviden
     assert not enabled._valid_block(bh, block)  # missing application evidence
 
     app.transition_metrics = lambda b, height: metrics()
+    # Proposer-supplied or uncommitted policy parameters are not authoritative.
+    app.policy_commitment = lambda height: "0" * 64
+    wrong_hash = TendermintEngine(app, secrets[0], transition_policy=LagrangianPolicy())
+    wrong_hash.start(1)
+    assert not wrong_hash._valid_block(bh, block)
+
+    app.policy_commitment = lambda height: LagrangianPolicy().commitment(CHAIN_ID)
     permitted = TendermintEngine(app, secrets[0], transition_policy=LagrangianPolicy())
     permitted.start(1)
     assert permitted._valid_block(bh, block)
@@ -112,6 +119,8 @@ def test_opt_in_bft_local_network_preserves_finality_and_liveness():
     net = Network(4, seed=17, byzantine=frozenset({0}))
     for app in net.apps:
         app.transition_metrics = lambda block, height: metrics()
+        # Test-only simulation stand-in for a genesis-pinned commitment.
+        app.policy_commitment = lambda height: LagrangianPolicy().commitment(CHAIN_ID)
     for node in net.nodes:
         node.transition_policy = LagrangianPolicy()
     net.start()
@@ -131,8 +140,36 @@ def test_unverified_concentration_rejects_consensus_candidates():
             previous_largest_share_ppm=260_000,
             largest_share_ppm=261_000,
         )
+        app.policy_commitment = lambda height: LagrangianPolicy().commitment(CHAIN_ID)
     for node in net.nodes:
         node.transition_policy = LagrangianPolicy()
     net.start()
     net.run_until(250)
     assert net.min_honest_height() == 0
+
+
+def test_policy_commitment_is_deterministic_chain_bound_and_configuration_bound():
+    gate = LagrangianPolicy()
+    assert gate.commitment(CHAIN_ID) == LagrangianPolicy(PolicyConfig()).commitment(CHAIN_ID)
+    assert len(gate.commitment(CHAIN_ID)) == 64
+    assert gate.commitment(CHAIN_ID) != gate.commitment(CHAIN_ID + "-fork")
+    updated = LagrangianPolicy(PolicyConfig(min_voice_ppm=200_000))
+    assert gate.commitment(CHAIN_ID) != updated.commitment(CHAIN_ID)
+    with pytest.raises(ValueError):
+        gate.commitment("")
+    with pytest.raises(ValueError):
+        PolicyConfig(voice_weight=10**9)
+
+
+def test_policy_commitment_callback_errors_fail_closed():
+    secret = dev_secret(0)
+    keys = [ed25519.public_key(dev_secret(i)).hex() for i in range(4)]
+    app = SimApp(CHAIN_ID, keys)
+    app.transition_metrics = lambda b, height: metrics()
+    def broken_commitment(height):
+        raise RuntimeError("synthetic genesis read failure")
+    app.policy_commitment = broken_commitment
+    blk = app.build_block(1, 0, sorted(keys)[0])
+    node = TendermintEngine(app, secret, transition_policy=LagrangianPolicy())
+    node.start(1)
+    assert not node._valid_block(block_hash(blk["header"]), blk)
