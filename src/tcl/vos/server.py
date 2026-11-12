@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import base64
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -12,6 +14,8 @@ from .runtime import GameError, GameOS, canonical
 MAX_REQUEST = 32 * 1024
 MAX_SAVE = 16 * 1024 * 1024
 STATIC = Path(__file__).with_name("web")
+# Build artifact generated from vos/wasm/q32.c and checked against Python parity.
+Q32_WASM_HASH = "724305349fe990ed5b549590b36b07b8cf2e04b67218724a49cb5f3851d0c624"
 ASSETS = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -106,6 +110,18 @@ def make_handler(store: SessionStore):
             if parsed.path == "/api/state":
                 actor = parse_qs(parsed.query).get("actor", [""])[0]
                 return self._json(200, store.os.snapshot(actor))
+            if parsed.path == "/q32.wasm":
+                try:
+                    raw = base64.b64decode(
+                        (STATIC / "q32.wasm.b64").read_bytes().strip(), validate=True
+                    )
+                except (OSError, ValueError) as exc:
+                    return self._json(500, {"error": "fixed-point WASM asset unavailable"})
+                if len(raw) > 16 * 1024 or sha256(raw).hexdigest() != Q32_WASM_HASH:
+                    return self._json(500, {"error": "fixed-point WASM integrity check failed"})
+                self._headers(200, "application/wasm", len(raw))
+                self.wfile.write(raw)
+                return
             if parsed.path in ASSETS:
                 filename, mime = ASSETS[parsed.path]
                 try:
