@@ -52,6 +52,8 @@ jobs:
         run: |
           set -euo pipefail
           node --check android/vos/app/src/main/assets/app.js
+          node --check android/vos/app/src/main/assets/host.js
+          node --test vos/protocol/tests/host_contract.test.cjs
           python3 - <<'PY'
           from pathlib import Path
           from xml.etree import ElementTree as ET
@@ -66,6 +68,7 @@ jobs:
           html=(base/'assets/index.html').read_text()
           assert 'Civitas 99' in html and 'Night Drive' in html
           assert '<script src="app.js" defer>' in html
+          assert '<script src="host.js" defer>' in html
           js=(base/'assets/app.js').read_text()
           assert 'TCLNative' in js and 'data-page' in js
           assert 'fetch(' not in js and 'XMLHttpRequest' not in js
