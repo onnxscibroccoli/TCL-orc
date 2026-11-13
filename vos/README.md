@@ -90,3 +90,74 @@ CI also runs a real WebAssembly arithmetic fixture using Node's `WebAssembly` AP
 - Optional use of TCL ledger commitments for game session attestations only after compatibility and independent security tests. **Do not mix game credits with the existing TCL financial ledger.**
 
 The game is a **prototype**, not a public multiplayer service or a completed gaming operating system.
+
+## Stage 2: deterministic courier gameplay and replication primitives
+
+The first vOS game now includes an eight-cell virtual courier lane. Drive the
+courier with five integer throttle choices (-2, -1, 0, +1, +2); every completed
+delivery grants *five reputation*, not market credits. Gameplay uses the
+**semi-implicit Euler** update in integer signed **Q32.32**:
+
+```text
+Q = 2^32
+a = throttle * Q / 4
+v[n+1] = clamp(v[n] + trunc(a * dt / Q), -3Q, 3Q)
+x[n+1] = x[n] + trunc(v_raw[n+1] * dt / Q)
+dt = Q for one simulated second
+```
+
+Velocity clamping occurs *after* position integration; the WASM worker uses
+this same order. Arriving at x >= 8Q resets position and velocity and awards
+one delivery. Negative positions reset to the origin. Malformed or overflowing
+fixed-point inputs are rejected before any event or market balance changes.
+
+- `src/tcl/vos/fixedpoint.py`: signed i64 arithmetic, truncation toward zero,
+  reserved INT64_MIN error sentinel, no floats.
+- `vos/wasm/q32.c`: integer-only WebAssembly implementation (no host imports)
+  with signed 64-bit entrypoints for addition, multiplication, velocity and
+  position. Not a general modding sandbox.
+- `src/tcl/vos/web/q32.wasm.b64`: integrity-pinned compiled guest delivered by
+  `GET /q32.wasm` only on the loopback demo server. The server verifies SHA-256.
+- `vos/wasm/parity.js`: Node WASM parity tests against 108 Python vectors,
+  including negative rounding, i64 extremes and overflow signaling.
+- `tests/test_vos_fixedpoint.py`: deterministic game replay, conservation,
+  invalid input rejection and local binary endpoint tests.
+
+The server remains authoritative. The browser independently calculates a
+courier move in the isolated WASM worker, compares its result with the accepted
+Python event, and displays a mismatch diagnostic rather than granting currency.
+
+### Delta-CRDT for optional social metadata
+
+`src/tcl/vos/sync.py` provides bounded Last-Writer-Wins registers and
+Observed-Remove Sets for **only presence/cosmetic state**. Delta packets use
+strict versioned JSON schemas and Lamport clocks, with deterministic tie-breaks,
+idempotent merging, tombstones and bounded replica size.
+
+**Never use delta-CRDT merges to reconcile market orders, game balances,
+credit issuance, voting, or cryptographic consensus.** These require ordered
+authenticated state transitions, replay and conservation checks. Current CRDT
+code is an in-process, adversarially tested protocol primitive, **not a
+connected libp2p network**: there is no QUIC, Noise, WebRTC, AutoNAT, DCUtR,
+relay service, peer authentication or production Internet-facing endpoint.
+Tests cover eventual convergence under packet reorder, partitions, duplicate
+delivery and invalid messages. It can later be connected through a narrowly
+scoped authenticated transport adapter once peer identities and rate limits
+are independently verified.
+
+To execute just the new acceptance tests:
+
+```bash
+python -m pytest -q tests/test_vos_fixedpoint.py tests/test_vos_sync.py
+clang --target=wasm32 -O2 -std=c11 -nostdlib -fvisibility=hidden \
+  -Wl,--no-entry -Wl,--strip-all -Wl,--export=q32_add \
+  -Wl,--export=q32_mul -Wl,--export=q32_velocity \
+  -Wl,--export=q32_position -o /tmp/q32.wasm vos/wasm/q32.c
+TCL_VOS_Q32_WASM=/tmp/q32.wasm node vos/wasm/parity.js
+```
+
+The CI release gates now require these tests plus both the rebuilt and the
+bundled WASM module's Python parity checks. Identity, rPPG, ZK personhood and
+Internet-wide NAT traversal are **not** implemented and are not needed for
+local gameplay. A low-entropy input heuristic alone must not suppress users
+with assistive technology or legitimate repetitive inputs.
