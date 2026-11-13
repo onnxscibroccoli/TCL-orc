@@ -99,7 +99,7 @@ def test_local_server_serves_only_integrity_pinned_wasm():
         data = response.read()
         assert response.status == 200
         assert response.getheader("Content-Type") == "application/wasm"
-        assert data[:4] == b"\\x00asm"
+        assert data[:4] == b"\x00asm"
         assert sha256(data).hexdigest() == Q32_WASM_HASH
         assert len(data) <= 16 * 1024
         con.close()
@@ -113,6 +113,6 @@ def test_bundled_base64_is_canonical_and_explicitly_bounded():
     from pathlib import Path
     b64 = Path(__file__).parents[1] / "src/tcl/vos/web/q32.wasm.b64"
     data = base64.b64decode(b64.read_bytes().strip(), validate=True)
-    assert data.startswith(b"\\x00asm\\x01\\x00\\x00\\x00")
+    assert data.startswith(b"\x00asm\x01\x00\x00\x00")
     assert sha256(data).hexdigest() == Q32_WASM_HASH
     assert MIN_VALID == ERROR_SENTINEL + 1
