@@ -52,6 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check android/vos/app/src/main/assets/app.js
+          bash -n android/vos/scripts/emulator-smoke.sh
           node --check android/vos/app/src/main/assets/host.js
           node --test vos/protocol/tests/host_contract.test.cjs
           python3 - <<'PY'
@@ -110,3 +111,45 @@ jobs:
           echo "### TCL vOS Android test APK" >> "$GITHUB_STEP_SUMMARY"
           echo "[Download the APK artifact]($ARTIFACT_URL) (artifact ID: $ARTIFACT_ID)" >> "$GITHUB_STEP_SUMMARY"
           echo "Android 8.0+ · offline-only · native local shared τ wallet · debug signature." >> "$GITHUB_STEP_SUMMARY"
+
+  emulator-runtime:
+    name: Android 15 launch and accessible-game smoke
+    needs: [build-and-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the exact signed APK from the verified build
+        uses: actions/download-artifact@v4
+        with:
+          name: TCL-vOS-Civitas-NightDrive-Android-debug-APK
+          path: /tmp/vos-apk
+      - name: Enable KVM hardware acceleration
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and launch vOS on Android API 35 emulator
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          ram-size: 2048M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-load -no-snapshot-save -camera-back none -camera-front none
+          disable-animations: true
+          script: bash android/vos/scripts/emulator-smoke.sh /tmp/vos-apk/app-debug.apk
+      - name: Publish emulator screenshot and accessibility hierarchy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TCL-vOS-Android15-runtime-evidence
+          path: /tmp/tcl-vos-runtime-evidence/
+          if-no-files-found: warn
+          retention-days: 14
