@@ -1,0 +1,18 @@
+; Engine-neutral TCL vOS rendering host pilot — no wallet implementation.
+config_version=5
+
+[application]
+config/name="TCL vOS — Night Drive"
+run/main_scene="res://scenes/night_drive.tscn"
+config/features=PackedStringArray("4.6", "GL Compatibility")
+
+[display]
+window/size/viewport_width=960
+window/size/viewport_height=540
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=true
+environment/defaults/default_clear_color=Color(0.0235294, 0.0392157, 0.0784314, 1)
