@@ -66,3 +66,25 @@ node --check android/vos/app/src/main/assets/app.js
 This is a **MVP**, not Grand Theft Auto or a fully featured game distribution platform. Night Drive has a retro top-down city and deliveries, **not** high-end 3D physics, pedestrians, combat, AI traffic behavior, external assets, or network multiplayer. It does not emulate Nintendo 64 games or redistribute copyrighted assets. Performance on target Android hardware still requires physical device acceptance.
 
 Next increments: re-use one canonical portable game action/matching schema across native Android and Python vOS; implement a signed game manifest and capability SDK; add game UI save/export, driving dynamics, missions and asset streaming; implement authenticated P2P sessions with safe authoritative currency reconciliation. No biometric/personhood gate is required for the offline MVP; production-grade anti-abuse/identity remains an independent future program.
+
+## Portability correction: JVM is an example, not the kernel requirement
+
+The Android implementation uses ordinary SDK Java classes solely because they
+are a small, easy-to-compile host adapter for the **first APK**. It does
+**not** designate Java, ART or the JVM as the cross-platform vOS kernel.
+
+The engine-neutral [vOS Host Port v1](../../vos/protocol/README.md) defines
+state/command/profile calls, one host-owned `TCL-vOS-tau` wallet,
+versioned game manifests, request idempotency and a strict host/accounting
+boundary. The HTML games now load `host.js` before `app.js`; the same UI
+can attach to another compatible game host instead of calling
+`TCLNative` directly.
+
+For graphics beyond Canvas2D, the open-source **Godot 4.6.1** engine has been
+introduced as an optional 3D Night Drive renderer under
+[vos/engines/godot](../../vos/engines/godot/README.md).
+It reuses upstream scene graphs, input, GPU batching and renderer/export
+infrastructure. The Godot preview is **not** in this Android APK yet, and
+cannot create its own τ wallet. Android continues to ship the tested
+retro city and two-game shared-credit experience until a single-host Godot
+adapter is fully integrated.
