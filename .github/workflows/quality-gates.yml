@@ -93,7 +93,7 @@ jobs:
           paths = Path("changed-prose-paths.txt").read_text().splitlines()
           selected = sorted(p for p in paths if p.startswith("docs/") and p.endswith(".md"))
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              out.write("files=" + json.dumps(selected, separators=(",", ":")) + "\\n")
+              out.write("files=" + json.dumps(selected, separators=(",", ":")) + "\n")
           print("Vale files:", selected)
           PY
 
