@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a1421">
+  <title>CIVITAS-99 · The Commons Exchange</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to city console</a>
+  <div class="shell">
+    <header class="topbar">
+      <div class="identity"><span class="brand">◇</span><div><small>TCL / VIRTUAL GAMING OS</small><h1>CIVITAS<span>-99</span></h1></div></div>
+      <div class="top-right"><span class="badge">● LOCAL SIMULATION</span><span id="turn" class="mono">TURN 000</span></div>
+    </header>
+    <main id="main">
+      <section class="masthead">
+        <div class="mast-copy"><p class="eyebrow">THE COMMONS EXCHANGE // SIMULATION 01</p>
+        <h2>Build the city.<br><em>Trade the future.</em></h2>
+        <p>Work in your district, earn resources, negotiate prices, and build shared infrastructure. Every action changes the same persistent city.</p>
+        <form id="identity-form" class="identity-form">
+          <label for="player-id">Your avatar</label>
+          <div class="field-row"><input id="player-id" name="player" maxlength="24" pattern="[a-z][a-z0-9_-]{1,23}" spellcheck="false" value="alice" required aria-describedby="player-help">
+          <button id="join-btn" type="submit">Enter city <span aria-hidden="true">↗</span></button></div>
+          <small id="player-help">Choose any 2–24 character lowercase username. Local demo: no sign-in or multiplayer identity verification.</small>
+        </form></div>
+        <div class="city-window" aria-label="Procedural city district visualization"><div class="window-top"><span>◌ METROPOLITAN GRID</span><span>05 × 09 / SIM</span></div>
+          <div id="map" class="map" role="img" aria-label="Procedural five by nine city map"></div>
+          <div class="window-bottom"><span>COMMUNITY ENGINE / ACTIVE</span><span id="population">0 CITIZENS</span></div></div>
+      </section>
+      <div id="notice" class="notice" role="status" aria-live="polite">Enter the city to start playing.</div>
+      <section class="dash-grid" aria-label="Trading dashboard">
+        <article class="panel holdings"><header class="panel-head"><div><p class="eyebrow">YOUR GAME WALLET</p><h3>Resources &amp; reputation</h3></div><span class="panel-icon">◎</span></header>
+          <p class="big-credits"><span id="credits">—</span> <small>CIV</small></p>
+          <p class="sub">In-game credits. Not redeemable for money.</p>
+          <div class="resource-grid"><div><span>⚡ Energy</span><strong id="energy">—</strong></div><div><span>◉ Water</span><strong id="water">—</strong></div><div><span>⬡ Alloy</span><strong id="alloy">—</strong></div></div>
+          <div class="reputation">★ Civic reputation <strong id="reputation">—</strong></div>
+        </article>
+        <article class="panel workshop"><header class="panel-head"><div><p class="eyebrow">PRODUCTION / WORKSHOP</p><h3>Earn your inventory</h3></div><span class="panel-icon">⌘</span></header>
+          <p>Choose a shift to produce five units. Each citizen has one shift per turn.</p>
+          <div class="work-btns"><button type="button" data-work="solar">⚡ Solar array<br><small>+5 energy</small></button><button type="button" data-work="waterworks">◉ Waterworks<br><small>+5 water</small></button><button type="button" data-work="recycling">⬡ Recycling<br><small>+5 alloy</small></button></div>
+          <div class="turn-control"><span id="shift-status">WORK SHIFT AVAILABLE</span><button type="button" id="next-turn">Advance turn →</button></div>
+        </article>
+        <article class="panel trade"><header class="panel-head"><div><p class="eyebrow">MARKET / LIMIT-ORDER EXCHANGE</p><h3>Trade with the city</h3></div><span class="panel-icon">↕</span></header>
+          <form id="trade-form"><div class="form-grid">
+            <label>Action<select name="side"><option value="buy">Buy</option><option value="sell">Sell</option></select></label>
+            <label>Resource<select id="market-resource" name="resource"><option value="energy">Energy</option><option value="water">Water</option><option value="alloy">Alloy</option></select></label>
+            <label>Limit price (CIV)<input name="price" type="number" min="1" max="10000" value="12" required></label>
+            <label>Quantity<input name="quantity" type="number" min="1" max="100" value="2" required></label>
+          </div><button type="submit" class="wide-button">Place limit order ↗</button></form>
+          <p class="sub">Trades settle at the resting order's price. Unfilled credits or resources remain reserved until filled or canceled.</p>
+        </article>
+        <article class="panel orderbook"><header class="panel-head"><div><p class="eyebrow">LIVE ORDER BOOK</p><h3 id="book-heading">Energy market</h3></div><span class="panel-icon">▥</span></header>
+          <div class="book-cols"><section><h4>BIDS <span>BUY</span></h4><div id="bids" class="orders"></div></section><section><h4>ASKS <span>SELL</span></h4><div id="asks" class="orders"></div></section></div>
+        </article>
+      </section>
+      <section class="bottom-grid">
+        <article class="panel projects"><header class="panel-head"><div><p class="eyebrow">THE COMMONS / PUBLIC WORKS</p><h3>Build something together</h3></div><span class="panel-icon">◈</span></header><div id="projects"></div></article>
+        <article class="panel tape"><header class="panel-head"><div><p class="eyebrow">EXECUTION TAPE</p><h3>Recent city trades</h3></div><span class="panel-icon">⌁</span></header><ol id="tape" aria-label="Recent executed trades"></ol></article>
+      </section>
+      <section class="panel wasm-lab" aria-labelledby="wasm-title">
+        <div><p class="eyebrow">VIRTUAL OS / ISOLATED COMPUTE</p><h3 id="wasm-title">WASM mini-game sandbox</h3>
+          <p class="sub">Run a safe demo scoring module in a separate browser worker. It cannot access credits, resources, files, network imports, or the trade engine.</p></div>
+        <div class="wasm-actions"><button type="button" id="wasm-run">Run guest score 7 ↗</button><output id="wasm-output" aria-live="polite">Not run</output></div>
+      </section>
+      <footer><span>TCL-vOS / CIVITAS-99 / ALPHA-01</span><span>LOCAL-ONLY PLAYTEST. NO REAL FINANCIAL ASSETS.</span><span id="event-count">0 EVENTS</span></footer>
+    </main>
+  </div>
+</body>
+</html>
+

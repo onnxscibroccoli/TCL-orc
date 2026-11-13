@@ -11,6 +11,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 CI = REPO / ".github" / "workflows" / "ci.yml"
 CRITICAL = {
+    "vos-game",
     "pytest",
     "lint",
     "zk",
@@ -105,6 +106,19 @@ def _jobs():
 def _needs(job):
     deps = job.get("needs", [])
     return {deps} if isinstance(deps, str) else set(deps)
+
+
+def test_vos_job_must_validate_market_wasm_and_jvm():
+    jobs = _jobs()
+    guest = jobs["vos-game"]
+    assert guest["permissions"] == {"contents": "read"}
+    steps = guest["steps"]
+    scripts = "\\n".join(s.get("run", "") for s in steps)
+    assert "tests/test_vos.py" in scripts
+    assert "node --check" in scripts
+    assert "WebAssembly.instantiate" in scripts
+    assert "javac --release 17" in scripts
+    assert "tcl vos --help" in scripts
 
 
 def test_release_and_image_publish_are_tag_only():
