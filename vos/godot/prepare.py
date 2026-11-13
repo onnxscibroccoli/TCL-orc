@@ -92,6 +92,23 @@ def prepare(source: Path, destination: Path) -> None:
         script = destination / "scripts" / name
         script.write_text(add_touch_actions(script.read_text()))
 
+    # OpenCity's desktop defaults use 22 traffic cars and 60 pedestrians.
+    # Godot 3D physics/animations are costly on entry-level Android devices.
+    # Restrict the *ambient* counts without removing vehicle gameplay.
+    low_power = '(OS.has_feature("mobile") or OS.has_feature("web"))'
+    for name, token, mobile_count in [
+        ("traffic.gd", "CAR_COUNT", 8),
+        ("peds.gd", "PED_COUNT", 18),
+    ]:
+        script = destination / "scripts" / name
+        original_script = script.read_text()
+        needle = f"for n in {token}:"
+        if needle not in original_script:
+            raise ValueError("Pinned upstream population loop moved: " + name)
+        script.write_text(original_script.replace(
+            needle, f"for n in ({mobile_count} if {low_power} else {token}):"
+        ))
+
     (destination / "TCL_ORIGIN.txt").write_text(
         f"Upstream: {UPSTREAM}\nPinned commit: {PIN}\n"
         "Source license: LICENSE (MIT)\nAsset credits: CREDITS.md\n"
