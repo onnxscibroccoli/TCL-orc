@@ -8,10 +8,11 @@ let visualX = 2, visualY = 2, screenW = 960, screenH = 430;
 
 function nativeCall(method, ...args) {
   try {
-    if (!window.TCLNative || typeof window.TCLNative[method] !== "function") {
-      throw new Error("Open this game through the TCL vOS Android APK to use the shared wallet.");
+    const host = window.VOSHost && window.VOSHost.connect();
+    if (!host) {
+      throw new Error("No vOS host wallet is attached. Open in the Android app or another compatible vOS host.");
     }
-    const response = JSON.parse(window.TCLNative[method](...args));
+    const response = host.invoke(method, ...args);
     if (!response.ok) throw new Error(response.error || "Game action rejected");
     if (response.state) { state = response.state; render(); }
     return response;
@@ -212,9 +213,9 @@ function boot() {
   $("upgrade-turbo").addEventListener("click",()=>command("nightdrive","tune",0));
   $("upgrade-paint").addEventListener("click",()=>command("nightdrive","tune",1));
   $("drive-refuel").addEventListener("click",()=>command("nightdrive","refuel",0));
-  document.addEventListener("pointerdown",()=>{if(window.TCLNative)window.TCLNative.observeInteraction();},{passive:true});
+  document.addEventListener("pointerdown",()=>{if(window.VOSHost){const h=window.VOSHost.connect();if(h)h.observeInteraction();}},{passive:true});
   document.addEventListener("keydown",e=>{
-    if(window.TCLNative)window.TCLNative.observeInteraction();
+    if(window.VOSHost){const h=window.VOSHost.connect();if(h)h.observeInteraction();}
     if(["INPUT","SELECT","TEXTAREA"].includes(document.activeElement.tagName))return;
     const directions={ArrowUp:0,KeyW:0,ArrowRight:1,KeyD:1,ArrowDown:2,KeyS:2,ArrowLeft:3,KeyA:3};
     if(Object.prototype.hasOwnProperty.call(directions,e.code)&&activePage==="nightdrive"){
