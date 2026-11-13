@@ -190,10 +190,30 @@ func _read_save() -> bool:
         var draft: Dictionary = fresh.duplicate(true)
         if _apply(draft, game, action) != "" or not _conserved(draft):
             return false
-        if JSON.stringify(item["state"]) != JSON.stringify(draft):
+        # Godot JSON parses numbers as floating-point by default. Validate
+        # exact integer semantics and recompute the canonical original payload;
+        # never hash deserialized float spellings such as 100.0 vs 100.
+        if typeof(item["state"]) != TYPE_DICTIONARY:
             return false
-        var unsigned: Dictionary = item.duplicate(true)
-        unsigned.erase("hash")
+        var stored: Dictionary = item["state"]
+        if stored.size() != draft.size():
+            return false
+        for key in draft:
+            if not stored.has(key):
+                return false
+            var value: Variant = stored[key]
+            if typeof(draft[key]) == TYPE_BOOL:
+                if typeof(value) != TYPE_BOOL or value != draft[key]:
+                    return false
+            else:
+                if typeof(value) != TYPE_FLOAT and typeof(value) != TYPE_INT:
+                    return false
+                if int(value) != draft[key] or float(value) != float(draft[key]):
+                    return false
+        var unsigned: Dictionary = {
+            "seq": last_seq + 1, "game": game, "action": action,
+            "id": request_id, "before": previous, "state": draft,
+        }
         var digest: String = (previous + "|" + JSON.stringify(unsigned)).sha256_text()
         if item["hash"] != digest:
             return false
