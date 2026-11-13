@@ -40,13 +40,13 @@ int64_t q32_mul(int64_t a, int64_t b) {
 
 __attribute__((visibility("default")))
 int64_t q32_velocity(int64_t v, int64_t a, int64_t dt) {
-    if (dt < 0) return ERR;
+    if (dt < 0 || dt > (INT64_C(1) << 32)) return ERR;
     return q32_add(v, q32_mul(a, dt));
 }
 
 __attribute__((visibility("default")))
 int64_t q32_position(int64_t p, int64_t v, int64_t a, int64_t dt) {
-    if (dt < 0) return ERR;
+    if (dt < 0 || dt > (INT64_C(1) << 32)) return ERR;
     int64_t v2 = q32_velocity(v, a, dt);
     if (v2 == ERR) return ERR;
     return q32_add(p, q32_mul(v2, dt));
