@@ -68,10 +68,19 @@ def prepare(source: Path, destination: Path) -> None:
     target = '[autoload]\n\n'
     if target not in original or 'DevCapture="*res://scripts/dev_capture.gd"' not in original:
         raise ValueError("Pinned upstream project autoload structure changed")
-    config.write_text(original.replace(
+    config_text = original.replace(
         'DevCapture="*res://scripts/dev_capture.gd"',
         'DevCapture="*res://scripts/dev_capture.gd"\nTCLWallet="*res://vos/tcl_wallet.gd"'
-    ).replace('config/name="OpenCity"', 'config/name="TCL vOS — OpenCity"'))
+    ).replace('config/name="OpenCity"', 'config/name="TCL vOS — OpenCity"')
+    # Android's export validator refuses projects without ETC2/ASTC texture
+    # import enabled, even with a valid signed export template.
+    if "[rendering]" not in config_text:
+        raise ValueError("Pinned upstream rendering section changed")
+    config_text = config_text.replace(
+        "[rendering]", "[rendering]\n"
+        "textures/vram_compression/import_etc2_astc=true"
+    )
+    config.write_text(config_text)
 
     scene = destination / "scenes" / "world.tscn"
     text = scene.read_text()
