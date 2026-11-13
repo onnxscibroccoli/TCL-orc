@@ -76,6 +76,19 @@ jobs:
           set -euo pipefail
           /tmp/tcl-godot --headless --editor --path build/tcl-vos-opencity --import --quit
 
+      - name: Boot actual OpenCity scene with TCL overlay (120 frames)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/tcl-godot --headless --path build/tcl-vos-opencity \
+            --quit-after 120 > /tmp/tcl-vos-scene-boot.log 2>&1
+          cat /tmp/tcl-vos-scene-boot.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Invalid (call|access)|Failed to load script' \
+            /tmp/tcl-vos-scene-boot.log; then
+            echo 'Godot 3D overlay runtime error' >&2
+            exit 1
+          fi
+
       - name: Verify shared universal wallet against Godot runtime
         shell: bash
         run: |
