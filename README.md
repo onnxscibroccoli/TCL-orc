@@ -598,6 +598,18 @@ Static workflow policy tests live in `tests/test_ci_release_gates.py`.
 These automated checks **do not** constitute independent production
 security certification. This remains a research testnet project.
 
+### Portable 3D engine track (Godot / OpenCity)
+
+The [TCL vOS Godot adapter](vos/godot/README.md) reuses Godot 4.7.2
+(MIT) and a pinned, MIT-licensed OpenCity open-world driving prototype
+rather than rebuilding traffic, on-foot movement, vehicles and 3D maps.
+Godot is portable across Android, desktop, iOS and the Web; Java is only
+an optional Android host. The Godot process shares a non-redeemable τ
+wallet across Civitas-99, OpenCity courier missions and NightDrive
+purchases. It does **not** connect to the TCL financial ledger or change
+consensus. Game-engine physics is not consensus deterministic.
+See the adapter README for provenance, limitations and Android export CI.
+
 ## TCL Virtual Gaming OS and Civitas-99 (alpha)
 
 The [playable vOS + Civitas-99 game](vos/README.md) now lives alongside the
