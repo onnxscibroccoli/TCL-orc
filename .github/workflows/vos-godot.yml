@@ -1,0 +1,46 @@
+name: TCL vOS Godot Renderer Compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'vos/engines/godot/**'
+      - '.github/workflows/vos-godot.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'vos/engines/godot/**'
+      - '.github/workflows/vos-godot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  renderer-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.6.1, non-.NET headless editor
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.6.1
+          use-dotnet: false
+          include-templates: false
+      - name: Verify Godot binary and import source
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          godot --headless --editor --path vos/engines/godot/night_drive --quit
+      - name: Test host-adapter renderer with no wallet mint
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path vos/engines/godot/night_drive \
+            --script res://tests/smoke.gd | tee /tmp/vos-godot-test.log
+          grep -F "Godot renderer host-ABI smoke PASS" /tmp/vos-godot-test.log

@@ -1,0 +1,23 @@
+{
+  "schema": "tcl-vos.game.v1",
+  "id": "civitas",
+  "name": "Civitas 99",
+  "engine": "html5-canvas",
+  "entrypoint": "assets/index.html#civitas",
+  "currency": "TCL-vOS-tau",
+  "wallet_scope": "host",
+  "permissions": [
+    "wallet.read",
+    "wallet.dispatch",
+    "game.local_state"
+  ],
+  "actions": [
+    "shift",
+    "buy",
+    "sell",
+    "next-turn"
+  ],
+  "accounting": "host-authoritative",
+  "telemetry": false,
+  "external_network": false
+}

@@ -624,6 +624,45 @@ network. The main CI release DAG now depends on vOS Python/gameplay, JS/WASM,
 and JVM compilation tests. The game has **no purchase, cash-out, brokerage,
 or external exchange operations** and the demo server accepts only loopback.
 
+## Standalone Android vOS: universal gaming credits (MVP)
+
+The [native Android arcade](android/vos/README.md) is a separate, self-contained
+APK for Android 8.0+. It runs without root, Termux, an account, Internet access,
+or elevated permissions. It contains two playable game modes:
+
+- **Civitas 99:** Produce and exchange fictional energy, water and alloy.
+- **Night Drive:** Explore an original retro city, complete delivery missions,
+  and buy vehicle upgrades using the **same universal vOS wallet**.
+
+Every earned or spent game credit (`τ`) is accounted for in a host-controlled,
+replay-verified journal. Credits earned in either game are immediately usable
+in the other. This explicitly addresses the vOS principle that currency is
+shared **across games**, not trapped inside individual titles.
+
+The APK is **local-only** and uses a simulated wallet: these credits are
+not connected to TCL-orc's financial consensus ledger or real-world currency.
+The device-only interaction-rhythm indicator is advisory, not proof of
+personhood, and never prevents gameplay.
+
+GitHub Actions [builds and verifies the Android debug APK](.github/workflows/android-vos.yml)
+and publishes the installable test artifact and SHA-256. See the Android README
+for direct installation and build instructions. No third-party multiplayer
+network, external purchase system, or biometric gate is claimed as complete.
+
 ## License
 
 See [`LICENSE`](LICENSE).
+
+### Open-source renderer / platform-neutral host (vOS)
+
+The Android host's Java implementation is **not** the mandatory TCL-orc
+kernel language. `vos/protocol/README.md` specifies a versioned, language-
+independent host interface; both built-in games already access the exact
+same host-managed τ balance through a portable browser adapter.
+
+A [Godot 4 cross-platform Night Drive 3D pilot](vos/engines/godot/README.md)
+now reuses an existing MIT-licensed game engine. It contains procedural
+city rendering and engine-native input, with an injected host port that
+**never owns or mints τ**. The installable Canvas2D Android MVP remains
+separate until Godot's renderer can run under the same universal wallet
+host. No gameplay already implemented has been removed.

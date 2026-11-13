@@ -1,0 +1,22 @@
+{
+  "schema": "tcl-vos.game.v1",
+  "id": "nightdrive",
+  "name": "Night Drive",
+  "engine": "html5-canvas",
+  "entrypoint": "assets/index.html#nightdrive",
+  "currency": "TCL-vOS-tau",
+  "wallet_scope": "host",
+  "permissions": [
+    "wallet.read",
+    "wallet.dispatch",
+    "game.local_state"
+  ],
+  "actions": [
+    "move",
+    "refuel",
+    "tune"
+  ],
+  "accounting": "host-authoritative",
+  "telemetry": false,
+  "external_network": false
+}

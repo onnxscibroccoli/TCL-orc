@@ -1,0 +1,112 @@
+name: TCL vOS Android APK
+
+on:
+  pull_request:
+    paths:
+      - 'android/vos/**'
+      - '.github/workflows/android-vos.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'android/vos/**'
+      - '.github/workflows/android-vos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK 35 and build tools
+        run: |
+          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
+          yes | sdkmanager --licenses >/dev/null || true
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Test the single-wallet native game kernel without an emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/tcl-native-classes
+          javac --release 17 -encoding UTF-8 -d /tmp/tcl-native-classes \
+            android/vos/app/src/main/java/org/tclorc/vos/GameKernel.java \
+            android/vos/app/src/main/java/org/tclorc/vos/EntropyMeter.java \
+            android/vos/tests/org/tclorc/vos/GameKernelTest.java
+          java -ea -cp /tmp/tcl-native-classes org.tclorc.vos.GameKernelTest
+      - name: Check bundled offline game and Android permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check android/vos/app/src/main/assets/app.js
+          node --check android/vos/app/src/main/assets/host.js
+          node --test vos/protocol/tests/host_contract.test.cjs
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          base=Path('android/vos/app/src/main')
+          manifest=(base/'AndroidManifest.xml').read_text()
+          assert 'android.permission.INTERNET' not in manifest
+          assert 'android.permission.CAMERA' not in manifest
+          assert 'android.permission.RECORD_AUDIO' not in manifest
+          assert 'android.permission.READ_CONTACTS' not in manifest
+          root=ET.fromstring(manifest)
+          assert not any('uses-permission' == x.tag for x in root)
+          html=(base/'assets/index.html').read_text()
+          assert 'Civitas 99' in html and 'Night Drive' in html
+          assert '<script src="app.js" defer>' in html
+          assert '<script src="host.js" defer>' in html
+          js=(base/'assets/app.js').read_text()
+          assert 'VOSHost.connect()' in js and 'data-page' in js
+          assert 'fetch(' not in js and 'XMLHttpRequest' not in js
+          print('Offline assets and zero-permission manifest PASS')
+          PY
+      - name: Build installable debug APK with Gradle
+        working-directory: android/vos
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify APK metadata and debug signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='android/vos/app/build/outputs/apk/debug/app-debug.apk'
+          test -s "$apk"
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
+          "${ANDROID_HOME}/build-tools/35.0.0/aapt" dump badging "$apk" | grep -F "package: name='org.tclorc.vos'"
+          "${ANDROID_HOME}/build-tools/35.0.0/aapt" dump badging "$apk" | grep -F "sdkVersion:'26'"
+          if "${ANDROID_HOME}/build-tools/35.0.0/aapt" dump permissions "$apk" | grep -E 'android.permission.(INTERNET|CAMERA|RECORD_AUDIO|READ_CONTACTS)'; then
+            echo 'Forbidden runtime permission in APK' >&2
+            exit 1
+          fi
+          unzip -l "$apk" | grep -E 'classes[0-9]*\.dex'
+          sha256sum "$apk" | tee /tmp/tcl-vOS-apk.sha256
+          cat /tmp/tcl-vOS-apk.sha256 >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ready-to-install Android debug APK
+        id: apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: TCL-vOS-Civitas-NightDrive-Android-debug-APK
+          path: android/vos/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish direct artifact URL in workflow summary
+        shell: bash
+        env:
+          ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
+          ARTIFACT_ID: ${{ steps.apk.outputs.artifact-id }}
+        run: |
+          echo "### TCL vOS Android test APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download the APK artifact]($ARTIFACT_URL) (artifact ID: $ARTIFACT_ID)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Android 8.0+ · offline-only · native local shared τ wallet · debug signature." >> "$GITHUB_STEP_SUMMARY"

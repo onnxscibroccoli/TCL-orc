@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#060d1a"><title>TCL vOS — The Arcade</title><link rel="stylesheet" href="style.css"></head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="logo" aria-label="TCL virtual gaming operating system"><span class="logo-cube">✦</span><span><b>TCL<span class="mint">/vOS</span></b><small>THE SOVEREIGN ARCADE</small></span></div>
+      <div class="wallet" role="status" aria-live="polite"><span class="wallet-icon">τ</span><span><small>UNIVERSAL GAME WALLET</small><strong id="wallet-credits">500 <em>τ</em></strong></span></div>
+    </header>
+    <nav class="nav" aria-label="Virtual OS game library">
+      <button class="nav-tab active" data-page="home" aria-current="page"><span>⌂</span> HOME</button>
+      <button class="nav-tab" data-page="civitas"><span>◇</span> CIVITAS 99</button>
+      <button class="nav-tab" data-page="nightdrive"><span>▱</span> NIGHT DRIVE</button>
+      <button class="nav-tab" data-page="wallet"><span>τ</span> WALLET</button>
+    </nav>
+    <main>
+      <section class="page active" id="page-home" aria-labelledby="home-title">
+        <div class="hero">
+          <div class="hero-copy"><p class="eyebrow">VIRTUAL GAMING OPERATING SYSTEM / LOCAL ALPHA 0.1</p><h1 id="home-title">ONE ARCADE.<br><span class="mint">ONE WALLET.</span><br>EVERY GAME.</h1><p>Earn <strong>τ</strong> in the marketplace. Spend it on a faster ride. Finish deliveries, bring those earnings back to the market. Your progress travels between games—without a server, account, or subscription.</p><button class="primary" data-page="nightdrive">START EXPLORING <span>↗</span></button><p class="fine">All currency is fictional, non-redeemable, and stored on this device. No blockchain or real money.</p></div>
+          <div class="hero-visual" aria-hidden="true"><div class="orbital one"></div><div class="orbital two"></div><div class="core-coin">τ</div><span class="satellite upper">CIVITAS ↗</span><span class="satellite lower">NIGHT DRIVE ↗</span></div>
+        </div>
+        <div class="section-head"><div><p class="eyebrow">YOUR INSTALLED WORLDS</p><h2>Game library <span class="counter">02 / 02</span></h2></div><span class="chip">● OFFLINE READY</span></div>
+        <div class="library-grid">
+          <article class="game-card civic"><div class="card-art city-art" aria-hidden="true"><span class="card-art-tag">ECONOMY SIM</span><span class="city-illustration">▰▴▰<br>▴▰▴</span></div><div class="card-info"><div><p class="eyebrow">GAME 01 · CIVIC MARKET</p><h3>Civitas 99</h3><p>Work shifts. Trade energy, water &amp; alloy. Build your shared balance.</p></div><button class="outline" data-page="civitas">LAUNCH GAME ↗</button></div></article>
+          <article class="game-card drive"><div class="card-art drive-art" aria-hidden="true"><span class="card-art-tag">OPEN CITY DRIVING</span><div class="sun"></div><div class="street"></div><span class="car-art">▰</span></div><div class="card-info"><div><p class="eyebrow">GAME 02 · CITY COURIER</p><h3>Night Drive</h3><p>Explore a retro city, complete deliveries, and tune your getaway machine.</p></div><button class="outline" data-page="nightdrive">LAUNCH GAME ↗</button></div></article>
+        </div>
+        <div class="profile-card"><div><p class="eyebrow">LOCAL GAME PROFILE</p><h3 id="current-profile">player</h3><p>Profiles are local saves, not verified accounts. Switching creates a separate wallet.</p></div><form id="profile-form" class="profile-controls"><label for="profile-name">Switch profile</label><div class="row"><input id="profile-name" type="text" inputmode="text" value="player" maxlength="24" pattern="[A-Za-z0-9_-]{2,24}" aria-label="Local profile name" required><button type="submit" class="outline">LOAD</button></div></form></div>
+      </section>
+      <section class="page" id="page-civitas" aria-labelledby="civitas-title">
+        <div class="game-heading"><p class="eyebrow">WORLD 01 / CIVITAS 99</p><h1 id="civitas-title">THE <span class="mint">COMMONS</span> EXCHANGE</h1><p>Power the city. Complete a shift for 16 τ. All credits go straight to your vOS wallet. This Android alpha uses a fixed-price NPC market; the desktop vOS prototype has a deeper limit order book.</p></div>
+        <div class="market-overview"><div><small>CURRENT TURN</small><strong id="civ-turn">01</strong></div><div><small>SHIFT</small><strong id="civ-shift">AVAILABLE</strong></div><div><small>YOUR τ</small><strong id="civ-wallet">500</strong></div></div>
+        <div class="section-head"><h2>Resource exchange</h2><span class="chip">LOCAL NPC LIQUIDITY</span></div>
+        <div id="market-list" class="market-list" aria-live="polite"></div>
+        <div class="mission-panel"><div><p class="eyebrow">CITY WORK SHIFT</p><h3>Keep the lights on</h3><p>Choose a shift: earn 16 τ plus two units of a resource. Work once per turn.</p></div><div class="mission-controls"><label for="work-role">Shift specialization</label><select id="work-role"><option value="0">Solar energy</option><option value="1">Water works</option><option value="2">Alloy recycling</option></select><button class="primary" id="work-shift">WORK SHIFT +16 τ</button><button class="outline" id="civ-next">ADVANCE TURN ↻</button></div></div>
+      </section>
+      <section class="page" id="page-nightdrive" aria-labelledby="drive-title">
+        <div class="game-heading drive-heading"><p class="eyebrow">WORLD 02 / OPEN-CITY DELIVERY</p><h1 id="drive-title">NIGHT <span class="magenta">DRIVE</span></h1><p>Explore a 24×24 retro city. Follow the gold delivery beacon, earn <b>45 τ</b> per completed route, and spend your rewards in Civitas—or tune your ride here.</p></div>
+        <div class="drive-hud"><div><small>POSITION</small><strong id="drive-pos">02, 02</strong></div><div><small>DESTINATION</small><strong id="drive-goal">12, 07</strong></div><div><small>FUEL</small><strong id="drive-fuel">60 / 60</strong></div><div><small>DELIVERIES</small><strong id="drive-deliveries">0</strong></div></div>
+        <div class="canvas-shell"><canvas id="city-canvas" role="img" aria-label="Top-down retro city driving game. Use arrow keys or the on-screen controls to navigate streets toward the delivery beacon."></canvas><div class="canvas-chrome" aria-hidden="true"><span>◉ LIVE CITY / LOCAL SIM</span><span>GRID 24 × 24</span></div></div>
+        <div class="drive-controls"><div class="dpad" aria-label="Driving controls"><div></div><button id="drive-up" data-dir="0" aria-label="Drive north">▲</button><div></div><button id="drive-left" data-dir="3" aria-label="Drive west">◀</button><div class="dpad-center">✚</div><button id="drive-right" data-dir="1" aria-label="Drive east">▶</button><div></div><button id="drive-down" data-dir="2" aria-label="Drive south">▼</button><div></div></div><div class="drive-controls-text"><h3>DRIVE THE CITY</h3><p>Use the D-pad, keyboard arrow keys or WASD. Roads follow a street grid. Deliveries award τ to your universal wallet; upgrades and fuel deduct from the same wallet.</p><span class="chip">TAP / HOLD TO DRIVE</span></div></div>
+        <div class="garage-grid"><button class="garage-tile" id="upgrade-turbo"><small>GARAGE · POWER</small><b>⚡ TURBO DRIVE</b><span id="turbo-status">UNLOCK FOR 100 τ</span></button><button class="garage-tile" id="upgrade-paint"><small>GARAGE · STYLE</small><b>✦ NEON PAINT</b><span id="paint-status">UNLOCK FOR 55 τ</span></button><button class="garage-tile" id="drive-refuel"><small>GARAGE · SERVICE</small><b>◈ REFUEL</b><span>FULL TANK · 20 τ</span></button></div>
+      </section>
+      <section class="page" id="page-wallet" aria-labelledby="wallet-title">
+        <div class="game-heading"><p class="eyebrow">OS SERVICE / UNIVERSAL CURRENCY</p><h1 id="wallet-title">THE <span class="mint">τ WALLET</span></h1><p>No isolated game coins. Civitas and Night Drive use the same local-native balance, recorded in a hash-linked, replay-verified journal.</p></div>
+        <div class="balance-display"><p>AVAILABLE UNIVERSAL CREDITS</p><strong id="wallet-big">500 <span>τ</span></strong><small>NON-TRANSFERABLE OUTSIDE THIS LOCAL vOS / NOT REAL MONEY</small></div>
+        <div class="wallet-stats"><div><small>GAME ISSUANCE (INCLUDING STARTER CREDITS)</small><strong id="issued">500</strong></div><div><small>GAME SINKS / SPENDING</small><strong id="sunk">0</strong></div><div><small>VERIFIED JOURNAL EVENTS</small><strong id="event-count">0</strong></div></div>
+        <div class="section-head"><h2>Local activity journal</h2><span class="chip">SHA-256 LINKED</span></div><ul id="wallet-history" class="history"></ul><p class="hash-note">Latest event digest: <code id="wallet-hash">—</code></p>
+        <div class="advisory"><p class="eyebrow">OPTIONAL INPUT RHYTHM · NO BIOMETRICS</p><p id="entropy-label">Gathering local input rhythm.</p><p id="entropy-details"></p><p class="fine">Input timing stays in memory on this device. It is informational and never blocks gameplay. It is not proof of personhood.</p></div>
+      </section>
+    </main>
+    <div id="notice" class="notice" role="status" aria-live="polite" aria-atomic="true">OFFLINE FIRST · READY TO PLAY</div>
+    <footer>✦ TCL vOS · LOCAL ALPHA · GAME CREDITS HAVE NO CASH VALUE · NO TELEMETRY</footer>
+  </div>
+  <script src="host.js" defer></script>
+  <script src="app.js" defer></script>
+</body></html>
