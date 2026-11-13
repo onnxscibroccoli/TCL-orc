@@ -14,7 +14,7 @@
   "actions": [
     "move",
     "refuel",
-    "upgrade"
+    "tune"
   ],
   "accounting": "host-authoritative",
   "telemetry": false,
