@@ -15,7 +15,7 @@ MAX_REQUEST = 32 * 1024
 MAX_SAVE = 16 * 1024 * 1024
 STATIC = Path(__file__).with_name("web")
 # Build artifact generated from vos/wasm/q32.c and checked against Python parity.
-Q32_WASM_HASH = "724305349fe990ed5b549590b36b07b8cf2e04b67218724a49cb5f3851d0c624"
+Q32_WASM_HASH = "6830f68d6e1b72b17426c0f121641c0c908aa2489ab5e10b860d7929bb4906fe"
 ASSETS = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
