@@ -1,0 +1,202 @@
+name: TCL vOS Godot OpenCity (portable)
+
+on:
+  pull_request:
+    paths:
+      - "vos/godot/**"
+      - ".github/workflows/godot-vos.yml"
+  push:
+    branches: [main]
+    paths:
+      - "vos/godot/**"
+      - ".github/workflows/godot-vos.yml"
+  workflow_dispatch:
+    inputs:
+      android_export:
+        description: "Build 3D Godot debug APK (downloads official 1.3 GB export template)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GODOT_VERSION: "4.7.2"
+  OPENCITY_SHA: "ba9514cdd88ecc2d40ecad503a644449fc98e665"
+
+jobs:
+  portable-wallet-and-game:
+    name: Godot game runtime + wallet replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned MIT OpenCity 3D engine/gameplay
+        uses: actions/checkout@v4
+        with:
+          repository: webgl-games/opencity
+          ref: ba9514cdd88ecc2d40ecad503a644449fc98e665
+          path: upstream-opencity
+          persist-credentials: false
+
+      - name: Prepare 3D vOS from pinned source (keeps MIT and CC0 attribution)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile vos/godot/prepare.py
+          python3 vos/godot/prepare.py --source upstream-opencity --out build/tcl-vos-opencity
+          grep -q 'TCLWallet=' build/tcl-vos-opencity/project.godot
+          test -s build/tcl-vos-opencity/LICENSE
+          test -s build/tcl-vos-opencity/CREDITS.md
+          grep -q 'TCLvOS' build/tcl-vos-opencity/scenes/world.tscn
+          grep -q 'vos_forward' build/tcl-vos-opencity/scripts/car.gd
+
+      - name: Install exact Godot 4.7.2 editor
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 4 \
+            "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip" \
+            -o /tmp/godot-editor.zip
+          unzip -q /tmp/godot-editor.zip -d /tmp/godot
+          GODOT="$(find /tmp/godot -maxdepth 1 -type f -name '*linux.x86_64' | head -n1)"
+          test -n "$GODOT"
+          chmod +x "$GODOT"
+          ln -s "$GODOT" /tmp/tcl-godot
+          /tmp/tcl-godot --headless --version
+
+      - name: Import and parse open-world Godot project
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/tcl-godot --headless --editor --path build/tcl-vos-opencity --import --quit
+
+      - name: Boot actual OpenCity scene with TCL overlay (120 frames)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/tcl-godot --headless --path build/tcl-vos-opencity \
+            --quit-after 120 > /tmp/tcl-vos-scene-boot.log 2>&1
+          cat /tmp/tcl-vos-scene-boot.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Invalid (call|access)|Failed to load script' \
+            /tmp/tcl-vos-scene-boot.log; then
+            echo 'Godot 3D overlay runtime error' >&2
+            exit 1
+          fi
+
+      - name: Verify shared universal wallet against Godot runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp vos/godot/wallet_test.gd build/tcl-vos-opencity/vos/wallet_test.gd
+          /tmp/tcl-godot --headless --path build/tcl-vos-opencity \
+            --script res://vos/wallet_test.gd
+
+      - name: Package reproducible Godot game source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/tcl-vos-opencity/.godot
+          cd build
+          zip -qr TCL-vOS-OpenCity-source.zip tcl-vos-opencity
+      - name: Upload source playable with Godot on desktop, Web, Android
+        uses: actions/upload-artifact@v4
+        with:
+          name: TCL-vOS-OpenCity-Godot-Source
+          path: build/TCL-vOS-OpenCity-source.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  android-godot-export:
+    name: Godot Android 3D debug APK (manual opt-in)
+    # 3D APK already verified on this branch; subsequent PR edits should not
+    # re-download 1.3 GB of templates. Export again explicitly when needed.
+    if: github.event_name == 'workflow_dispatch' && inputs.android_export
+    needs: portable-wallet-and-game
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: webgl-games/opencity
+          ref: ba9514cdd88ecc2d40ecad503a644449fc98e665
+          path: upstream-opencity
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+      - name: Install build tools and generate local-only export
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          python3 vos/godot/prepare.py --source upstream-opencity --out build/tcl-vos-opencity
+          cat > build/tcl-vos-opencity/export_presets.cfg <<'CFG'
+          [preset.0]
+          name="Android"
+          platform="Android"
+          runnable=true
+          advanced_options=false
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path="tcl-vos-opencity-debug.apk"
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          encrypt_pck=false
+          encrypt_directory=false
+
+          [preset.0.options]
+          gradle_build/use_gradle_build=false
+          package/unique_name="org.tclorc.vos.opencity"
+          package/name="TCL vOS OpenCity"
+          package/signed=true
+          package/target_sdk=35
+          package/min_sdk=26
+          architectures/arm64-v8a=true
+          architectures/armeabi-v7a=false
+          architectures/x86_64=false
+          CFG
+          curl -fsSL --retry 4 \
+            "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip" \
+            -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT="$(find /tmp/godot -maxdepth 1 -type f -name '*linux.x86_64' | head -n1)"
+          chmod +x "$GODOT"
+          ln -sf "$GODOT" /tmp/tcl-godot
+          curl -fsSL --retry 4 \
+            "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz" \
+            -o /tmp/templates.tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          unzip -p /tmp/templates.tpz templates/android_debug.apk \
+            > "$HOME/.local/share/godot/export_templates/4.7.2.stable/android_debug.apk"
+          printf '4.7.2.stable\n' > "$HOME/.local/share/godot/export_templates/4.7.2.stable/version.txt"
+          keytool -genkeypair -noprompt -alias androiddebugkey -keyalg RSA -keysize 2048 \
+            -validity 3650 -keystore /tmp/debug.keystore -storepass android \
+            -keypass android -dname "CN=TCL vOS Debug,O=Local Demo,C=US"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH=/tmp/debug.keystore
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android
+          /tmp/tcl-godot --headless --editor --path build/tcl-vos-opencity --import --quit
+          /tmp/tcl-godot --headless --path build/tcl-vos-opencity \
+            --export-debug Android "$PWD/build/tcl-vos-opencity-debug.apk"
+          test -s build/tcl-vos-opencity-debug.apk
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose build/tcl-vos-opencity-debug.apk
+          sha256sum build/tcl-vos-opencity-debug.apk >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload 3D Godot Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TCL-vOS-OpenCity-Godot-Android-APK
+          path: build/tcl-vos-opencity-debug.apk
+          if-no-files-found: error
+          retention-days: 30
