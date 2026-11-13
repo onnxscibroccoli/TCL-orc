@@ -13,6 +13,8 @@ import re
 from threading import RLock
 from typing import Any, Callable
 
+from .fixedpoint import Q, Motion, FixedPointError, ratio
+
 RESOURCES = ("energy", "water", "alloy")
 WORK = {
     "solar": ("energy", 5),
@@ -24,7 +26,8 @@ PROJECTS = {
     "water-cooperative": ("water", 30),
     "circular-factory": ("alloy", 30),
 }
-CAPABILITIES = frozenset({"world.read", "world.work", "market.trade", "civic.contribute", "world.advance"})
+CAPABILITIES = frozenset({"world.read", "world.work", "market.trade", "civic.contribute",
+                          "world.advance", "world.navigate"})
 ACTOR_RE = re.compile(r"^[a-z][a-z0-9_-]{1,23}$")
 MAX_OPEN_ORDERS = 200
 MAX_EVENTS = 50_000
@@ -73,6 +76,9 @@ class Player:
     inventory: dict[str, int] = field(default_factory=lambda: {r: 8 for r in RESOURCES})
     reputation: int = 0
     last_work_tick: int = -1
+    courier_position: int = 0  # Q32.32, cells along the city delivery lane
+    courier_velocity: int = 0  # Q32.32, cells per simulated second
+    courier_deliveries: int = 0
 
 
 @dataclass
@@ -133,6 +139,44 @@ class Civitas99:
         p.last_work_tick = self.tick
         self.issued_resources[resource] += units
         return {"work": role, "resource": resource, "units": units,
+                "reputation": p.reputation}
+
+    def _navigate(self, actor: str, throttle: Any, steps: Any) -> dict[str, Any]:
+        """Play a bounded deterministic courier mini-game (no ledger access).
+
+        Semi-implicit Euler integration: v[t+1]=v[t]+a*dt,
+        x[t+1]=x[t]+v[t+1]*dt, all as Q32.32 i64 integers.
+        The game awards *reputation only*, never CIV balance or tokens.
+        """
+        p = self._player(actor)
+        if type(throttle) is not int or not -2 <= throttle <= 2:
+            raise GameError("courier throttle must be integer -2 through 2")
+        count = positive_int(steps, "steps", 6)
+        acceleration = ratio(throttle, 4)  # quarter cell/s^2 per input step
+        state = Motion(p.courier_position, p.courier_velocity)
+        delivered = 0
+        try:
+            for _ in range(count):
+                state = state.advance(acceleration)
+                if state.position < 0:
+                    state = Motion(0, 0)
+                elif state.position >= 8 * Q:
+                    delivered += 1
+                    state = Motion(0, 0)
+                elif state.velocity > 3 * Q:
+                    state = Motion(state.position, 3 * Q)
+                elif state.velocity < -(3 * Q):
+                    state = Motion(state.position, -(3 * Q))
+        except FixedPointError as exc:
+            raise GameError("courier simulation exceeded fixed-point bounds") from exc
+        p.courier_position = state.position
+        p.courier_velocity = state.velocity
+        p.courier_deliveries += delivered
+        p.reputation += delivered * 5
+        return {"courier_position_q32": state.position,
+                "courier_velocity_q32": state.velocity,
+                "deliveries_completed": delivered,
+                "total_deliveries": p.courier_deliveries,
                 "reputation": p.reputation}
 
     def _advance(self, turns: Any) -> dict[str, Any]:
@@ -245,6 +289,10 @@ class Civitas99:
             if params:
                 raise GameError("join accepts no parameters")
             return self._join(actor)
+        if action == "navigate":
+            if set(params) != {"throttle", "steps"}:
+                raise GameError("navigate requires throttle and steps")
+            return self._navigate(actor, params["throttle"], params["steps"])
         if action == "advance":
             if set(params) != {"turns"}:
                 raise GameError("advance requires turns")
@@ -305,7 +353,11 @@ class Civitas99:
         return {"game": "civitas99", "version": VERSION, "turn": self.tick,
                 "player": None if p is None else {"id": actor, "credits": p.credits,
                     "inventory": dict(p.inventory), "reputation": p.reputation,
-                    "worked_this_turn": p.last_work_tick == self.tick},
+                    "worked_this_turn": p.last_work_tick == self.tick,
+                    "courier": {"position_q32": p.courier_position,
+                                "velocity_q32": p.courier_velocity,
+                                "cell": p.courier_position // Q,
+                                "deliveries": p.courier_deliveries}},
                 "players": len(self.players), "projects": projects, "books": books,
                 "trades": list(reversed(self.trades[-24:])), "districts": districts,
                 "open_orders": len(self.orders), "virtual_currency": "CIV (non-redeemable)"}
@@ -355,7 +407,7 @@ class GameOS:
                 raise GameError("invalid command schema")
             permissions = {"join": "world.read", "work": "world.work", "advance": "world.advance",
                            "contribute": "civic.contribute", "order": "market.trade",
-                           "cancel": "market.trade"}
+                           "cancel": "market.trade", "navigate": "world.navigate"}
             if action not in permissions or permissions[action] not in self.manifest.capabilities:
                 raise GameError("action not permitted by the installed game manifest")
             if len(self.journal) >= MAX_EVENTS:

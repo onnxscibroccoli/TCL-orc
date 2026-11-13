@@ -649,6 +649,15 @@ and publishes the installable test artifact and SHA-256. See the Android README
 for direct installation and build instructions. No third-party multiplayer
 network, external purchase system, or biometric gate is claimed as complete.
 
+### vOS deterministic physics and local replication (experimental)
+
+Civitas-99 also has a deterministic Q32.32 courier simulation, tested
+against a no-import WebAssembly implementation and the Python reference.
+A bounded delta-CRDT for cosmetic/presence metadata converges under
+reordering and partitions; it cannot mutate game orders, the universal
+Android TCL vOS τ wallet or TCL ledger consensus.
+Tests and limitations: [vOS documentation](vos/README.md).
+
 ## License
 
 See [`LICENSE`](LICENSE).
