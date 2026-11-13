@@ -178,4 +178,11 @@ class DeltaReplica:
         }
 
     def commitment(self) -> str:
-        return sha256(b"TCL-VOS-CRDT-V1\\x00" + _canonical(self.full_delta())).hexdigest()
+        """Replica-independent cryptographic fingerprint of converged CRDT state."""
+        state = {
+            "register": [[k, *v] for k, v in sorted(self.register.items())],
+            "adds": [[item, [[node, tick] for node, tick in sorted(dots)]]
+                     for item, dots in sorted(self.adds.items())],
+            "tombstones": [[node, tick] for node, tick in sorted(self.tombstones)],
+        }
+        return sha256(b"TCL-VOS-CRDT-V1\x00" + _canonical(state)).hexdigest()
