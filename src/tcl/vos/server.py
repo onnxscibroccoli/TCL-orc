@@ -115,7 +115,7 @@ def make_handler(store: SessionStore):
                     raw = base64.b64decode(
                         (STATIC / "q32.wasm.b64").read_bytes().strip(), validate=True
                     )
-                except (OSError, ValueError) as exc:
+                except (OSError, ValueError):
                     return self._json(500, {"error": "fixed-point WASM asset unavailable"})
                 if len(raw) > 16 * 1024 or sha256(raw).hexdigest() != Q32_WASM_HASH:
                     return self._json(500, {"error": "fixed-point WASM integrity check failed"})
