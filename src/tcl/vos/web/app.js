@@ -26,7 +26,8 @@ async function action(kind, params = {}) {
       kind === "join" ? `Welcome to Civitas-99, ${actor}. Your first shift is ready.` :
       kind === "advance" ? `Turn ${result.turn} is now active.` : `Order #${result.cancelled} canceled.`);
     await load();
-  } catch(e){notice(e.message,true);}
+    return result;
+  } catch(e){notice(e.message,true);return null;}
 }
 function renderOrders(which, orders) {
   const root = $(which); root.replaceChildren();
@@ -52,6 +53,11 @@ function render() {
   for (const r of ["energy","water","alloy"]) $(r).textContent = p ? formatted(p.inventory[r]) : "—";
   $("reputation").textContent = p ? formatted(p.reputation) : "—";
   $("shift-status").textContent = p && p.worked_this_turn ? "SHIFT COMPLETE / ADVANCE TURN" : "WORK SHIFT AVAILABLE";
+  $("courier-drive").disabled = !p;
+  const courier = p && p.courier;
+  $("courier-status").textContent = courier ?
+    `Delivery lane ${courier.cell}/8 · ${courier.deliveries} deliveries completed · reputation ${p.reputation}` :
+    "Enter the city to begin a delivery.";
   for(const b of document.querySelectorAll("[data-work]")) b.disabled = !p || p.worked_this_turn;
   const grid = $("map"); grid.replaceChildren();
   for(const tile of world.districts) {const e = node("div", "", `tile ${tile.type}`); e.title = tile.type; grid.append(e);}
@@ -97,6 +103,59 @@ const previous=localStorage.getItem("tcl-vos-actor");
 if(previous && /^[a-z][a-z0-9_-]{1,23}$/.test(previous)){actor=previous;$("player-id").value=actor;}
 $("player-id").addEventListener("change",()=>{actor=$("player-id").value.trim().toLowerCase();load();});
 load();
+
+// WASM preview and authoritative host action are compared before giving credit
+// to the browser's local parity display. Host state remains canonical.
+$("courier-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!world || !world.player) {notice("Enter the city before driving.",true);return;}
+  const input = new FormData(event.currentTarget);
+  const throttle = Number(input.get("throttle"));
+  const steps = Number(input.get("steps"));
+  if (!Number.isInteger(steps) || steps < 1 || steps > 6) {
+    notice("Choose 1 to 6 simulated seconds.",true);return;
+  }
+  const before = world.player.courier;
+  const button = $("courier-drive");
+  button.disabled = true;
+  $("courier-physics").textContent = "Comparing sandboxed WASM and server physics…";
+  let guest = null;
+  try {
+    guest = await new Promise(resolve => {
+      const worker = new Worker("/guest_worker.js");
+      let closed = false;
+      const finish = value => {
+        if (closed) return;
+        closed = true;
+        clearTimeout(timer);
+        worker.terminate();
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish({ok:false,error:"worker budget exceeded"}), 1500);
+      worker.onmessage = e => finish(e.data);
+      worker.onerror = () => finish({ok:false,error:"worker failed"});
+      worker.postMessage({op:"motion", throttle, steps,
+        position:String(before.position_q32), velocity:String(before.velocity_q32)});
+    });
+    const result = await action("navigate",{throttle,steps});
+    if (!result) {
+      $("courier-physics").textContent = "Navigation was rejected by the game server.";
+    } else if (guest && guest.ok) {
+      const parity = String(result.courier_position_q32) === guest.position_q32 &&
+        String(result.courier_velocity_q32) === guest.velocity_q32 &&
+        result.deliveries_completed === guest.deliveries;
+      $("courier-physics").textContent = parity ?
+        "✓ Bit-exact WASM / Python Q32.32 parity verified for this move." :
+        "⚠ WASM/Python mismatch detected. Check simulation configuration.";
+      if (!parity) notice("Courier mismatch detected; see physics diagnostics.",true);
+    } else {
+      $("courier-physics").textContent = "Server move recorded; WASM preview unavailable: " +
+        String(guest && guest.error || "unknown worker failure");
+    }
+  } finally {
+    button.disabled = !world || !world.player;
+  }
+});
 
 // Pure i32 score(x) = 2*x; a compact no-import WASM test module.
 const WASM_SCORE_DEMO = [0,97,115,109,1,0,0,0,1,6,1,96,1,127,1,127,3,2,1,0,7,9,1,5,115,99,111,114,101,0,0,10,9,1,7,0,32,0,65,2,108,11];
