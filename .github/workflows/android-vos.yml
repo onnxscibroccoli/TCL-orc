@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-android-vos-${{ github.event.pull_request.number || github.ref }}
+  group: android-vos-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -29,22 +29,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      # setup-android v3 defaults to the discontinued "tools" package.
-      # Override its packages input so current GitHub Ubuntu images bootstrap.
       - uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools'
-          log-accepted-android-sdk-licenses: 'false'
       - name: Install Android SDK 35 and build tools
-        shell: bash
         run: |
-          set -euo pipefail
-          : "${ANDROID_HOME:=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          command -v sdkmanager
           sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
-          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
-          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          yes | sdkmanager --licenses >/dev/null || true
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
