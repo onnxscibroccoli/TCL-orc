@@ -29,11 +29,18 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      # GitHub's Ubuntu runner already includes Android command-line tools.
+      # android-actions/setup-android@v3 tries to install the removed "tools"
+      # SDK package and fails before compilation on current runner images.
       - name: Install Android SDK 35 and build tools
+        shell: bash
         run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          command -v sdkmanager
           sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
-          yes | sdkmanager --licenses >/dev/null || true
+          test -f "${ANDROID_HOME}/platforms/android-35/android.jar"
+          test -x "${ANDROID_HOME}/build-tools/35.0.0/apksigner"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
