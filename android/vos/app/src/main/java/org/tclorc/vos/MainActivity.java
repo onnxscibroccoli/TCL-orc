@@ -30,7 +30,7 @@ public final class MainActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
     private static final String ORIGIN = "https://" + HOST + "/assets/index.html";
     private static final Set<String> ASSETS = new HashSet<>(Arrays.asList(
-            "index.html", "style.css", "app.js"));
+            "index.html", "style.css", "app.js", "host.js"));
     private static final String CSP = "default-src 'none'; script-src 'self'; " +
             "style-src 'self'; img-src 'self' data:; connect-src 'none'; " +
             "worker-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'";
