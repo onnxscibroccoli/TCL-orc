@@ -90,6 +90,13 @@ def test_docs_workflow_changes_fail_closed_and_never_claim_to_deploy():
     assert "|| true" not in shell
     prose = jobs["prose-style-lint"]
     assert prose["permissions"] == {"contents": "read"}
+    collector = next(s for s in prose["steps"] if s.get("id") == "changed-prose")
+    assert "git diff --name-only" in collector["run"]
+    assert "GITHUB_OUTPUT" in collector["run"]
+    assert "|| true" not in collector["run"]
+    vale = next(s for s in prose["steps"] if "vale-action" in s.get("uses", ""))
+    assert vale["with"]["files"] == "${{ steps.changed-prose.outputs.files }}"
+    assert "changed-prose.outputs.files" in vale["if"]
     assert next(step["with"]["reporter"] for step in prose["steps"]
                 if "vale-action" in step.get("uses", "")) == "github-pr-annotations"
     preview = jobs["deploy-staging-preview"]
