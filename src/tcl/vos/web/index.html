@@ -60,6 +60,29 @@
         <article class="panel projects"><header class="panel-head"><div><p class="eyebrow">THE COMMONS / PUBLIC WORKS</p><h3>Build something together</h3></div><span class="panel-icon">◈</span></header><div id="projects"></div></article>
         <article class="panel tape"><header class="panel-head"><div><p class="eyebrow">EXECUTION TAPE</p><h3>Recent city trades</h3></div><span class="panel-icon">⌁</span></header><ol id="tape" aria-label="Recent executed trades"></ol></article>
       </section>
+      <section class="panel courier" aria-labelledby="courier-title">
+        <div><p class="eyebrow">CIVIC COURIER / DETERMINISTIC PHYSICS</p>
+          <h3 id="courier-title">Deliver supplies through the city</h3>
+          <p class="sub">Move a virtual delivery vehicle using integer Q32.32 motion. Each eight-cell delivery earns reputation, not tradeable credits.</p>
+          <output id="courier-status" role="status" aria-live="polite">Enter the city to begin a delivery.</output>
+          <p class="sub" id="courier-physics">Fixed-point WASM preview: not run</p>
+        </div>
+        <form id="courier-form" class="courier-controls">
+          <label>Acceleration
+            <select name="throttle" id="courier-throttle">
+              <option value="-2">Brake hard −2</option>
+              <option value="-1">Brake −1</option>
+              <option value="0">Coast 0</option>
+              <option value="1">Accelerate +1</option>
+              <option value="2" selected>Accelerate +2</option>
+            </select>
+          </label>
+          <label>Simulation steps (up to six)
+            <input name="steps" id="courier-steps" type="number" min="1" max="6" step="1" value="3" required>
+          </label>
+          <button type="submit" id="courier-drive">Drive courier ↗</button>
+        </form>
+      </section>
       <section class="panel wasm-lab" aria-labelledby="wasm-title">
         <div><p class="eyebrow">VIRTUAL OS / ISOLATED COMPUTE</p><h3 id="wasm-title">WASM mini-game sandbox</h3>
           <p class="sub">Run a safe demo scoring module in a separate browser worker. It cannot access credits, resources, files, network imports, or the trade engine.</p></div>
