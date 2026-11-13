@@ -114,7 +114,9 @@ jobs:
 
   android-godot-export:
     name: Godot Android 3D debug APK (manual opt-in)
-    if: github.event_name == 'workflow_dispatch' && inputs.android_export
+    # Build once on this integration PR as an end-to-end Android acceptance test.
+    # On main, Android export remains an explicit user-triggered opt-in.
+    if: (github.event_name == 'pull_request' && github.head_ref == 'feat/vos-godot-opencity-portable-20261112') || (github.event_name == 'workflow_dispatch' && inputs.android_export)
     needs: portable-wallet-and-game
     runs-on: ubuntu-latest
     timeout-minutes: 45
