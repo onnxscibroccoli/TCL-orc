@@ -29,7 +29,7 @@ jobs:
       - name: Install Python game and test dependencies
         run: python -m pip install -r requirements-test.txt && python -m pip install -e .
       - name: Deterministic market, replay, HTTP and conservation tests
-        run: python -m pytest -q tests/test_vos.py
+        run: python -m pytest -q tests/test_vos.py tests/test_vos_fixedpoint.py tests/test_vos_sync.py
       - name: Verify integrated TCL CLI and bundled browser assets
         shell: bash
         run: |
@@ -58,6 +58,29 @@ jobs:
                   r.instance.exports.score(7) !== 14) process.exit(1);
           }).catch(e => {console.error(e); process.exit(1);});
           JS
+      - name: Compile Q32.32 WASM with no host imports; compare golden vectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/tcl-vos
+          clang --target=wasm32 -O2 -std=c11 -nostdlib -fvisibility=hidden \
+            -Wl,--no-entry -Wl,--strip-all -Wl,--export=q32_add \
+            -Wl,--export=q32_mul -Wl,--export=q32_velocity \
+            -Wl,--export=q32_position -Wl,-z,stack-size=16384 \
+            -o /tmp/tcl-vos/q32-built.wasm vos/wasm/q32.c
+          python - <<'PY'
+          import base64
+          from hashlib import sha256
+          from pathlib import Path
+          from tcl.vos.server import Q32_WASM_HASH
+          packed = base64.b64decode(
+              Path("src/tcl/vos/web/q32.wasm.b64").read_bytes().strip(), validate=True
+          )
+          assert sha256(packed).hexdigest() == Q32_WASM_HASH
+          Path("/tmp/tcl-vos/q32-shipped.wasm").write_bytes(packed)
+          PY
+          TCL_VOS_Q32_WASM=/tmp/tcl-vos/q32-built.wasm node vos/wasm/parity.js
+          TCL_VOS_Q32_WASM=/tmp/tcl-vos/q32-shipped.wasm node vos/wasm/parity.js
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
