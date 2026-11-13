@@ -627,3 +627,12 @@ or external exchange operations** and the demo server accepts only loopback.
 ## License
 
 See [`LICENSE`](LICENSE).
+
+### vOS deterministic physics and local replication (experimental)
+
+Civitas-99 now exposes a keyboard-accessible courier game implemented with
+signed Q32.32 arithmetic, tested against a bundled no-import WebAssembly
+module and a deterministic Python reference. `src/tcl/vos/sync.py` also
+provides bounded, eventually convergent delta-CRDTs for **cosmetic/presence
+metadata only**. Neither module authorizes changes to the financial ledger
+or experimental BFT governance. Full test/limitations: [vOS docs](vos/README.md).
