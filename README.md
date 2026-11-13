@@ -652,3 +652,17 @@ network, external purchase system, or biometric gate is claimed as complete.
 ## License
 
 See [`LICENSE`](LICENSE).
+
+### Open-source renderer / platform-neutral host (vOS)
+
+The Android host's Java implementation is **not** the mandatory TCL-orc
+kernel language. `vos/protocol/README.md` specifies a versioned, language-
+independent host interface; both built-in games already access the exact
+same host-managed τ balance through a portable browser adapter.
+
+A [Godot 4 cross-platform Night Drive 3D pilot](vos/engines/godot/README.md)
+now reuses an existing MIT-licensed game engine. It contains procedural
+city rendering and engine-native input, with an injected host port that
+**never owns or mints τ**. The installable Canvas2D Android MVP remains
+separate until Godot's renderer can run under the same universal wallet
+host. No gameplay already implemented has been removed.
