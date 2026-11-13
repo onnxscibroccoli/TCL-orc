@@ -88,3 +88,24 @@ infrastructure. The Godot preview is **not** in this Android APK yet, and
 cannot create its own τ wallet. Android continues to ship the tested
 retro city and two-game shared-credit experience until a single-host Godot
 adapter is fully integrated.
+
+
+## Android 15 runtime acceptance gate
+
+The APK build now has a distinct **emulator-runtime** job that downloads
+the exact previously verified signed APK, installs it on Android API 35,
+launches `org.tclorc.vos/.MainActivity`, verifies the process remains
+alive, waits for **Civitas** and **Night Drive** labels in the accessibility
+hierarchy, and captures a PNG screenshot, UI hierarchy and Logcat.
+
+The workflow uses the maintained open-source
+`reactivecircus/android-emulator-runner@v2.38.0` rather than building an
+emulator harness from scratch. The test script is
+`android/vos/scripts/emulator-smoke.sh`; the evidence artifact is
+`TCL-vOS-Android15-runtime-evidence`.
+
+An emulator pass is a valuable **runtime launch and accessible rendering**
+check, but it does not prove that all touch interactions work correctly on
+a physical Samsung device. The signed APK is a debug/test artifact and does
+not come with automated app-store signing credentials.
+
