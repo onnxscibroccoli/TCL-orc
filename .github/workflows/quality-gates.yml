@@ -73,10 +73,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Vale on changed lines
+      # v3 now reports all of docs/ on pushes even with filter_mode=added.
+      # Explicit changed-file selection prevents unrelated legacy alerts from
+      # failing a docs-neutral release. Unresolvable diffs fail closed.
+      - name: Resolve changed prose files
+        id: changed-prose
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git cat-file -e "${BASE_SHA}^{commit}" || exit 1
+          git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- docs/ > changed-prose-paths.txt
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          paths = Path("changed-prose-paths.txt").read_text().splitlines()
+          selected = sorted(p for p in paths if p.startswith("docs/") and p.endswith(".md"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write("files=" + json.dumps(selected, separators=(",", ":")) + "\\n")
+          print("Vale files:", selected)
+          PY
+
+      - name: Run Vale on changed documentation only
+        if: steps.changed-prose.outputs.files != '[]'
         uses: vale-cli/vale-action@v3
         with:
-          files: docs
+          files: ${{ steps.changed-prose.outputs.files }}
           min_alert_level: error
           reporter: github-pr-annotations
           filter_mode: added
